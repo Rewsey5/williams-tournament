@@ -7,7 +7,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, addDoc, getDocs, onSnapshot, query, orderBy, deleteDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, doc, getDoc, setDoc, collection, addDoc, getDocs, onSnapshot, deleteDoc, serverTimestamp, increment, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDjaIvNU4cIh6alK_MZRoRhRyUt6S3-0qY",
@@ -21,14 +21,14 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-// ══ GUEST LIST ══
+// ══ CONSTANTS ══
 const GUESTS = ["Will","Rachel","Leigh","Charlie","Lanni","Tim","Anastashia","Tay","Ellen","Di","Steve","Sarah","Jack","Alex McDonald","Masia","Ollie","Liam","Siobhan","Xavier","Tamrin","Ryan","Sienna","Seb","Charlotte","Angus","Bec","Morgan","Maddy Brown","Maddy","Alex Broussard","Pat","Caitlin","Aaron","Kitty","Mim","Eska","Jojo","Rich","Ivy","Tilly","Henry","Paul Smith","Holly","Sophie","Eddy","Mike","Teresa","Emily","Kane","James","Dianna","Josh","Kelly","Noah","Len","Karen","Dianne Anderson","Pete","David","Kate","Tamara","Dave","Francis","Maeve","Zozo","Stephen McDonald","Steven Rewse-Bongers","Lilian","Eleanor","Harriet","Amber","Ducky","Patrice","Sam","Clara","Mitch","Grace","Alfie","Ewan","Paul Harrison","Dianne McDonald"];
 
 const HOUSES = [
-  {id:'dragon', name:'Dragon', emoji:'🐉', color:'#c0392b'},
-  {id:'wolf',   name:'Wolf',   emoji:'🐺', color:'#2471a3'},
-  {id:'snake',  name:'Snake',  emoji:'🐍', color:'#1e8449'},
-  {id:'lion',   name:'Lion',   emoji:'🦁', color:'#b7770d'},
+  {id:'dragon',name:'Dragon',emoji:'🐉',color:'#c0392b'},
+  {id:'wolf',  name:'Wolf',  emoji:'🐺',color:'#2471a3'},
+  {id:'snake', name:'Snake', emoji:'🐍',color:'#1e8449'},
+  {id:'lion',  name:'Lion',  emoji:'🦁',color:'#b7770d'},
 ];
 
 const TEAM_EVENTS = [
@@ -41,229 +41,193 @@ const TEAM_EVENTS = [
 const RANK_PTS = [30,20,10,0];
 const STARTING_PTS = 5;
 const ADMIN_PW = '21';
-let adminUnlocked = false;
+const RIDDLE_PTS = 7;
 
-// ══ LOCAL STATE (mirrors Firestore) ══
-let STATE = {
-  teamRankings: {},
-  archery: [],
-  nail: [],
-  eggs: {dragon:0,wolf:0,snake:0,lion:0},
-  bonus: {dragon:0,wolf:0,snake:0,lion:0},
-  duels: [],
-  playerHouses: {},
+const RIDDLES = [
+  {id:'r1', q:"I have cities, but no houses live there. I have mountains, but no trees grow there. I have water, but no fish swim there. I have roads, but no carts travel there. What am I?", hint:"A cartographer's greatest creation.", keys:["map"]},
+  {id:'r2', q:"A knight rides into a village on Friday, stays two days, and leaves on Friday. How?", hint:"The answer lies not in the days, but in a name.", keys:["friday"]},
+  {id:'r3', q:"The more you take from me, the larger I become. What am I?", hint:"Found in the earth beneath thy feet.", keys:["hole"]},
+  {id:'r4', q:"I am what every knight rides toward, what every ship sails for, what every dreamer chases. Yet no matter how far you travel, I remain exactly as far away as when you began. What am I?", hint:"Where the earth meets the sky.", keys:["horizon"]},
+  {id:'r5', q:"I have four legs but cannot run, a back but no spine. I bear the weight of kings and peasants alike, yet I have never walked a single step. What am I?", hint:"Found in every great hall, around every feasting table.", keys:["chair"]},
+  {id:'r6', q:"I am always hungry, I must always be fed. The finger I touch will soon turn red. What am I?", hint:"It warms the great hall on a winter's night.", keys:["fire"]},
+  {id:'r7', q:"I am lighter than a feather, yet the strongest man cannot hold me for more than a few minutes. What am I?", hint:"Every living soul does it without thinking.", keys:["breath","air"]},
+  {id:'r8', q:"A blacksmith has a brother, but the brother has no brother. How?", hint:"Question thine assumptions about the blacksmith.", keys:["woman","sister","female","she","her"]},
+  {id:'r9', q:"What can run but never walks, has a mouth but never talks, has a head but never weeps, has a bed but never sleeps?", hint:"It flows from the mountains to the sea.", keys:["river","stream"]},
+  {id:'r10',q:"I am the beginning of everything, the end of everywhere, the beginning of eternity, the end of time and space. What am I?", hint:"Look not for meaning — look for form.", keys:["e","letter e","the letter e"]},
+];
+
+// ══ STATE ══
+let S = {
+  teamRankings:{}, eggs:{dragon:0,wolf:0,snake:0,lion:0},
+  bonus:{dragon:0,wolf:0,snake:0,lion:0}, playerHouses:{},
+  archery:[], nail:[], duels:[], riddles:{}, art:[],
 };
+let adminUnlocked = false;
+let currentView = 'scoreboard';
+let submitting = false;
 
-// ══ FIRESTORE HELPERS ══
-async function fsGet(path) {
-  const snap = await getDoc(doc(db, ...path.split('/')));
-  return snap.exists() ? snap.data() : null;
-}
-async function fsSet(path, data) {
-  await setDoc(doc(db, ...path.split('/')), data, {merge:true});
-}
-async function fsAdd(col, data) {
-  return await addDoc(collection(db, col), {...data, ts: serverTimestamp()});
-}
-async function fsDel(col, id) {
-  await deleteDoc(doc(db, col, id));
-}
-async function fsGetAll(col) {
-  const snap = await getDocs(collection(db, col));
-  return snap.docs.map(d => ({id: d.id, ...d.data()}));
-}
+// ══ FIRESTORE ══
+async function fsSet(path, data){ await setDoc(doc(db,...path.split('/')),data,{merge:true}); }
+async function fsAdd(col, data){ return await addDoc(collection(db,col),{...data,ts:serverTimestamp()}); }
+async function fsDel(col, id){ await deleteDoc(doc(db,col,id)); }
+async function fsGetAll(col){ const s=await getDocs(collection(db,col)); return s.docs.map(d=>({id:d.id,...d.data()})); }
 
-// ══ LOAD ALL DATA ══
-async function loadAll() {
+async function loadAll(){
   showLoading(true);
   try {
-    const [rankings, eggs, bonus, houses, archery, nail, duels] = await Promise.all([
-      fsGet('state/teamRankings'),
-      fsGet('state/eggs'),
-      fsGet('state/bonus'),
-      fsGet('state/playerHouses'),
-      fsGetAll('archery'),
-      fsGetAll('nail'),
-      fsGetAll('duels'),
+    const [rankings,eggs,bonus,houses,ridst,archery,nail,duels,art] = await Promise.all([
+      getDoc(doc(db,'state','teamRankings')),
+      getDoc(doc(db,'state','eggs')),
+      getDoc(doc(db,'state','bonus')),
+      getDoc(doc(db,'state','playerHouses')),
+      getDoc(doc(db,'state','riddles')),
+      fsGetAll('archery'), fsGetAll('nail'), fsGetAll('duels'), fsGetAll('art'),
     ]);
-    STATE.teamRankings = rankings || {};
-    STATE.eggs = eggs || {dragon:0,wolf:0,snake:0,lion:0};
-    STATE.bonus = bonus || {dragon:0,wolf:0,snake:0,lion:0};
-    STATE.playerHouses = houses || {};
-    STATE.archery = archery;
-    STATE.nail = nail;
-    STATE.duels = duels;
-  } catch(e) { toast('Connection error — retrying...'); }
+    S.teamRankings = rankings.exists()?rankings.data():{};
+    S.eggs = eggs.exists()?eggs.data():{dragon:0,wolf:0,snake:0,lion:0};
+    S.bonus = bonus.exists()?bonus.data():{dragon:0,wolf:0,snake:0,lion:0};
+    S.playerHouses = houses.exists()?houses.data():{};
+    S.riddles = ridst.exists()?ridst.data():{};
+    S.archery=archery; S.nail=nail; S.duels=duels; S.art=art;
+  } catch(e){ toast('Scrolls unreachable — check thy connection'); }
   showLoading(false);
 }
 
-// ══ REAL-TIME LISTENERS ══
-function startListeners() {
-  onSnapshot(collection(db,'archery'), snap => {
-    STATE.archery = snap.docs.map(d=>({id:d.id,...d.data()}));
-    if(currentView==='scoreboard') renderScoreboard();
-    if(currentView==='archery') renderArcheryPage();
-  });
-  onSnapshot(collection(db,'nail'), snap => {
-    STATE.nail = snap.docs.map(d=>({id:d.id,...d.data()}));
-    if(currentView==='scoreboard') renderScoreboard();
-    if(currentView==='nail') renderNailPage();
-  });
-  onSnapshot(collection(db,'duels'), snap => {
-    STATE.duels = snap.docs.map(d=>({id:d.id,...d.data()}));
-    if(currentView==='duel') renderDuelPage();
-  });
-  onSnapshot(doc(db,'state','teamRankings'), snap => {
-    if(snap.exists()) STATE.teamRankings = snap.data();
-    if(currentView==='scoreboard') renderScoreboard();
-  });
-  onSnapshot(doc(db,'state','eggs'), snap => {
-    if(snap.exists()) STATE.eggs = snap.data();
-    if(currentView==='scoreboard') renderScoreboard();
-  });
-  onSnapshot(doc(db,'state','bonus'), snap => {
-    if(snap.exists()) STATE.bonus = snap.data();
-    if(currentView==='scoreboard') renderScoreboard();
-  });
-  onSnapshot(doc(db,'state','playerHouses'), snap => {
-    if(snap.exists()) STATE.playerHouses = snap.data();
-  });
+function startListeners(){
+  onSnapshot(collection(db,'archery'),s=>{ S.archery=s.docs.map(d=>({id:d.id,...d.data()})); if(currentView==='scoreboard')renderScoreboard(); if(currentView==='archery')renderArcheryBoard(); });
+  onSnapshot(collection(db,'nail'),s=>{ S.nail=s.docs.map(d=>({id:d.id,...d.data()})); if(currentView==='scoreboard')renderScoreboard(); if(currentView==='nail')renderNailBoard(); });
+  onSnapshot(collection(db,'duels'),s=>{ S.duels=s.docs.map(d=>({id:d.id,...d.data()})); if(currentView==='duel')renderDuels(); });
+  onSnapshot(collection(db,'art'),s=>{ S.art=s.docs.map(d=>({id:d.id,...d.data()})); if(currentView==='art')renderArt(); if(adminUnlocked&&currentView==='maester')renderMaester(); });
+  onSnapshot(doc(db,'state','teamRankings'),s=>{ if(s.exists())S.teamRankings=s.data(); if(currentView==='scoreboard')renderScoreboard(); });
+  onSnapshot(doc(db,'state','eggs'),s=>{ if(s.exists())S.eggs=s.data(); if(currentView==='scoreboard')renderScoreboard(); });
+  onSnapshot(doc(db,'state','bonus'),s=>{ if(s.exists())S.bonus=s.data(); if(currentView==='scoreboard')renderScoreboard(); });
+  onSnapshot(doc(db,'state','playerHouses'),s=>{ if(s.exists())S.playerHouses=s.data(); });
+  onSnapshot(doc(db,'state','riddles'),s=>{ if(s.exists())S.riddles=s.data(); if(currentView==='riddles')renderRiddles(); if(adminUnlocked&&currentView==='maester')renderMaester(); });
 }
 
 // ══ POINTS ══
-function housePoints() {
-  const pts = {dragon:0,wolf:0,snake:0,lion:0};
-  TEAM_EVENTS.forEach(ev => {
-    const r = STATE.teamRankings[ev.id];
-    if(!r) return;
-    r.forEach((hid,i) => { if(hid && pts[hid]!==undefined) pts[hid] += RANK_PTS[i]; });
+function housePoints(){
+  const pts={dragon:0,wolf:0,snake:0,lion:0};
+  TEAM_EVENTS.forEach(ev=>{
+    const r=S.teamRankings[ev.id];
+    if(!r)return;
+    r.forEach((hid,i)=>{ if(hid&&pts[hid]!==undefined) pts[hid]+=RANK_PTS[i]; });
   });
-  HOUSES.forEach(h => {
-    const shots = STATE.archery.filter(a=>a.house===h.id);
-    if(shots.length===0) return;
-    const avg = shots.reduce((s,a)=>s+a.score,0)/shots.length;
-    pts[h.id] += Math.round(avg*10);
+  HOUSES.forEach(h=>{
+    const shots=S.archery.filter(a=>a.house===h.id);
+    if(shots.length===0)return;
+    pts[h.id]+=Math.round(shots.reduce((s,a)=>s+a.score,0)/shots.length*10);
   });
-  HOUSES.forEach(h => {
-    const entries = STATE.nail.filter(n=>n.house===h.id);
-    if(entries.length===0) return;
-    const avg = entries.reduce((s,n)=>s+Math.max(0,10-n.swings),0)/entries.length;
-    pts[h.id] += Math.round(avg*10);
+  HOUSES.forEach(h=>{
+    const entries=S.nail.filter(n=>n.house===h.id);
+    if(entries.length===0)return;
+    pts[h.id]+=Math.round(entries.reduce((s,n)=>s+Math.max(0,10-n.swings),0)/entries.length*10);
   });
-  HOUSES.forEach(h => { pts[h.id] += Math.min(30,(STATE.eggs[h.id]||0)*3); });
-  HOUSES.forEach(h => { pts[h.id] += (STATE.bonus[h.id]||0); });
+  HOUSES.forEach(h=>{ pts[h.id]+=Math.min(30,(S.eggs[h.id]||0)*3); });
+  HOUSES.forEach(h=>{ pts[h.id]+=(S.bonus[h.id]||0); });
+  // Riddle points flow to house
+  Object.values(S.riddles).forEach(rd=>{
+    if(rd.solved&&rd.winnerHouse&&pts[rd.winnerHouse]!==undefined) pts[rd.winnerHouse]+=RIDDLE_PTS;
+  });
   return pts;
 }
 
-function personalPoints(name) {
-  const norm = normName(name);
-  let pts = STARTING_PTS;
-  const breakdown = [{label:'⚔ Starting Honour', pts: STARTING_PTS, detail:'All warriors begin with 5 pts'}];
-
-  const shots = STATE.archery.filter(a=>normName(a.name)===norm);
-  if(shots.length>0) {
-    const ap = shots.reduce((s,a)=>s+a.score,0);
-    pts+=ap;
-    breakdown.push({label:'🏹 Archery', pts:ap, detail:shots.length+' shot(s)'});
+function personalPoints(name){
+  const norm=normName(name);
+  let pts=STARTING_PTS;
+  const breakdown=[{label:'⚔ Starting Honour',pts:STARTING_PTS,detail:'All warriors begin with 5 pts'}];
+  const shots=S.archery.filter(a=>normName(a.name)===norm);
+  if(shots.length>0){ const ap=shots.reduce((s,a)=>s+a.score,0); pts+=ap; breakdown.push({label:'🏹 Archery',pts:ap,detail:shots.length+' shot(s)'}); }
+  const nails=S.nail.filter(n=>normName(n.name)===norm);
+  if(nails.length>0){ const np=nails.reduce((s,n)=>s+Math.max(0,10-n.swings),0); pts+=np; breakdown.push({label:'🔨 Nail Log',pts:np,detail:nails.map(n=>n.swings+' swings').join(', ')}); }
+  const myDuels=S.duels.filter(d=>d.status==='done'&&(normName(d.p1)===norm||normName(d.p2)===norm));
+  if(myDuels.length>0){
+    const dp=myDuels.reduce((s,d)=>normName(d.winner)===norm?s+d.wager:s-d.wager,0);
+    pts+=dp;
+    breakdown.push({label:'⚔ Duels',pts:dp,detail:myDuels.filter(d=>normName(d.winner)===norm).length+'W / '+myDuels.filter(d=>normName(d.winner)!==norm).length+'L'});
   }
-  const nails = STATE.nail.filter(n=>normName(n.name)===norm);
-  if(nails.length>0) {
-    const np = nails.reduce((s,n)=>s+Math.max(0,10-n.swings),0);
-    pts+=np;
-    breakdown.push({label:'🔨 Nail Into Log', pts:np, detail:nails.map(n=>n.swings+' swings').join(', ')});
-  }
-  const myDuels = STATE.duels.filter(d=>d.status==='done'&&(normName(d.p1)===norm||normName(d.p2)===norm));
-  myDuels.forEach(d => {
-    if(normName(d.winner)===norm) pts+=d.wager;
-    else pts-=d.wager;
-  });
-  const duelWins = myDuels.filter(d=>normName(d.winner)===norm).length;
-  const duelLoss = myDuels.length - duelWins;
-  if(myDuels.length>0) {
-    const dp = myDuels.reduce((s,d)=>normName(d.winner)===norm?s+d.wager:s-d.wager,0);
-    breakdown.push({label:'⚔ Duels', pts:dp, detail:duelWins+'W / '+duelLoss+'L'});
-  }
-  return {pts, breakdown, duels: STATE.duels.filter(d=>normName(d.p1)===norm||normName(d.p2)===norm)};
+  // Riddle wins
+  const riddleWins=Object.values(S.riddles).filter(r=>r.solved&&normName(r.winnerName)===norm);
+  if(riddleWins.length>0){ pts+=riddleWins.length*RIDDLE_PTS; breakdown.push({label:'🧠 Riddles',pts:riddleWins.length*RIDDLE_PTS,detail:riddleWins.length+' riddle(s) solved'}); }
+  return {pts,breakdown,duels:S.duels.filter(d=>normName(d.p1)===norm||normName(d.p2)===norm)};
 }
 
-function individualLeaderboard() {
-  const all = {};
-  STATE.archery.forEach(a=>{ if(!all[normName(a.name)]) all[normName(a.name)]={name:a.name,house:a.house}; });
-  STATE.nail.forEach(n=>{ if(!all[normName(n.name)]) all[normName(n.name)]={name:n.name,house:n.house}; });
-  STATE.duels.filter(d=>d.status==='done').forEach(d=>{
+function houseSumPersonal(){
+  const sums={dragon:0,wolf:0,snake:0,lion:0};
+  const allNames={};
+  S.archery.forEach(a=>{ if(!allNames[normName(a.name)]) allNames[normName(a.name)]={name:a.name,house:a.house}; });
+  S.nail.forEach(n=>{ if(!allNames[normName(n.name)]) allNames[normName(n.name)]={name:n.name,house:n.house}; });
+  S.duels.filter(d=>d.status==='done').forEach(d=>{
+    if(!allNames[normName(d.p1)]) allNames[normName(d.p1)]={name:d.p1,house:d.p1house};
+    if(!allNames[normName(d.p2)]) allNames[normName(d.p2)]={name:d.p2,house:d.p2house};
+  });
+  Object.values(S.riddles).filter(r=>r.solved&&r.winnerHouse).forEach(r=>{
+    if(!allNames[normName(r.winnerName)]) allNames[normName(r.winnerName)]={name:r.winnerName,house:r.winnerHouse};
+  });
+  Object.values(allNames).forEach(p=>{ if(sums[p.house]!==undefined) sums[p.house]+=personalPoints(p.name).pts; });
+  return sums;
+}
+
+function individualLeaderboard(){
+  const all={};
+  S.archery.forEach(a=>{ if(!all[normName(a.name)]) all[normName(a.name)]={name:a.name,house:a.house}; });
+  S.nail.forEach(n=>{ if(!all[normName(n.name)]) all[normName(n.name)]={name:n.name,house:n.house}; });
+  S.duels.filter(d=>d.status==='done').forEach(d=>{
     if(!all[normName(d.p1)]) all[normName(d.p1)]={name:d.p1,house:d.p1house};
     if(!all[normName(d.p2)]) all[normName(d.p2)]={name:d.p2,house:d.p2house};
+  });
+  Object.values(S.riddles).filter(r=>r.solved).forEach(r=>{
+    if(!all[normName(r.winnerName)]) all[normName(r.winnerName)]={name:r.winnerName,house:r.winnerHouse};
   });
   return Object.values(all).map(p=>({...p,pts:personalPoints(p.name).pts})).sort((a,b)=>b.pts-a.pts);
 }
 
 // ══ FUZZY NAME ══
-function normName(n) { return String(n).toLowerCase().replace(/\s+/g,''); }
-function fuzzyMatch(input, list) {
-  const ni = normName(input);
+function normName(n){ return String(n||'').toLowerCase().replace(/\s+/g,'').replace(/[^a-z0-9]/g,''); }
+function fuzzyMatch(input,list){
+  const ni=normName(input);
   if(!ni||ni.length<1) return [];
-  const scored = list.map(n=>{
-    const nn = normName(n);
-    if(nn===ni) return {n,score:100};
-    if(nn.startsWith(ni)||ni.startsWith(nn)) return {n,score:80};
-    let overlap=0;
-    for(let i=0;i<Math.min(ni.length,nn.length);i++) if(ni[i]===nn[i]) overlap++;
-    return {n,score:overlap*10-Math.abs(ni.length-nn.length)*2};
-  }).filter(x=>x.score>15).sort((a,b)=>b.score-a.score);
-  return scored.slice(0,5).map(x=>x.n);
+  return list.map(n=>{ const nn=normName(n); if(nn===ni)return{n,s:100}; if(nn.startsWith(ni)||ni.startsWith(nn))return{n,s:80}; let ov=0; for(let i=0;i<Math.min(ni.length,nn.length);i++) if(ni[i]===nn[i])ov++; return{n,s:ov*10-Math.abs(ni.length-nn.length)*2}; }).filter(x=>x.s>15).sort((a,b)=>b.s-a.s).slice(0,5).map(x=>x.n);
 }
 
-function setupNameInput(inputId, sugId, onPick) {
-  const inp = document.getElementById(inputId);
-  const sug = document.getElementById(sugId);
-  if(!inp||!sug) return;
-  inp.addEventListener('input', ()=>{
-    const matches = fuzzyMatch(inp.value, GUESTS);
-    if(!inp.value||matches.length===0){sug.style.display='none';return;}
-    sug.innerHTML = matches.map(m=>`<div data-name="${esc(m)}">${m}</div>`).join('');
+function setupNameInput(inputId,sugId,onPick){
+  const inp=document.getElementById(inputId);
+  const sug=document.getElementById(sugId);
+  if(!inp||!sug)return;
+  const newInp=inp.cloneNode(true); inp.parentNode.replaceChild(newInp,inp);
+  newInp.addEventListener('input',()=>{
+    const m=fuzzyMatch(newInp.value,GUESTS);
+    if(!newInp.value||m.length===0){sug.style.display='none';return;}
+    sug.innerHTML=m.map(n=>`<div data-n="${esc(n)}">${n}</div>`).join('');
     sug.style.display='block';
-    sug.querySelectorAll('div').forEach(d=>{
-      d.addEventListener('click',()=>{
-        inp.value=d.dataset.name;
-        sug.style.display='none';
-        if(onPick) onPick(d.dataset.name);
-      });
-    });
+    sug.querySelectorAll('div').forEach(d=>d.addEventListener('click',()=>{ newInp.value=d.dataset.n; sug.style.display='none'; if(onPick)onPick(d.dataset.n); }));
   });
 }
 
-// ══ VIEW STATE ══
-let currentView = 'scoreboard';
-let selHouse = null;
-let selArchScore = null;
-let selEvent = null;
-
-function showView(v) {
-  currentView = v;
+// ══ VIEWS ══
+function showView(v){
+  currentView=v;
   document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(x=>x.classList.remove('active'));
-  const el = document.getElementById('view-'+v);
-  const nb = document.getElementById('nav-'+v);
-  if(el) el.classList.add('active');
-  if(nb) nb.classList.add('active');
-  if(v==='scoreboard') renderScoreboard();
-  if(v==='archery') renderArcheryPage();
-  if(v==='nail') renderNailPage();
-  if(v==='duel') renderDuelPage();
-  if(v==='personal') initPersonalPage();
-  if(v==='cleric'&&adminUnlocked) renderCleric();
-  if(v==='qr') renderQR();
-  if(v==='phototest') initPhotoTest();
-  if(v==='cleric'&&!adminUnlocked) showClericLogin();
+  const el=document.getElementById('view-'+v); if(el)el.classList.add('active');
+  const nb=document.getElementById('nav-'+v); if(nb)nb.classList.add('active');
+  if(v==='scoreboard')renderScoreboard();
+  if(v==='archery'){renderArcheryBoard();setupNameInput('arch-name','arch-sug',n=>{const h=S.playerHouses[normName(n)];if(h)setArchHouse(h);});}
+  if(v==='nail'){renderNailBoard();setupNameInput('nail-name','nail-sug',n=>{const h=S.playerHouses[normName(n)];if(h)setNailHouse(h);});}
+  if(v==='duel'){renderDuels();setupNameInput('duel-p1','duel-sug1',()=>{});setupNameInput('duel-p2','duel-sug2',()=>{});}
+  if(v==='personal'){setupNameInput('personal-name','personal-sug',()=>{});}
+  if(v==='art'){renderArt();setupNameInput('art-name','art-sug',n=>{const h=S.playerHouses[normName(n)];if(h)document.getElementById('art-house').value=h;});}
+  if(v==='riddles')renderRiddles();
+  if(v==='maester'&&!adminUnlocked)showMaesterLogin();
+  if(v==='maester'&&adminUnlocked)renderMaester();
 }
 
 // ══ SCOREBOARD ══
-function renderScoreboard() {
-  const pts = housePoints();
-  const ranked = HOUSES.slice().sort((a,b)=>(pts[b.id]||0)-(pts[a.id]||0));
-  const ranks = ['1st','2nd','3rd','4th'];
-
-  document.getElementById('sb-houses').innerHTML = ranked.map((h,i)=>`
+function renderScoreboard(){
+  const pts=housePoints();
+  const ranked=HOUSES.slice().sort((a,b)=>(pts[b.id]||0)-(pts[a.id]||0));
+  const ranks=['1st','2nd','3rd','4th'];
+  document.getElementById('sb-houses').innerHTML=ranked.map((h,i)=>`
     <div class="house-card ${h.id}">
       <span class="h-emoji">${h.emoji}</span>
       <div class="h-name">House ${h.name}</div>
@@ -271,586 +235,529 @@ function renderScoreboard() {
       <div class="h-rank">${ranks[i]}</div>
     </div>`).join('');
 
-  document.getElementById('sb-team-rows').innerHTML = TEAM_EVENTS.map(ev=>{
-    const r = STATE.teamRankings[ev.id];
-    let detail = r ? r.map((hid,i)=>{const h=HOUSES.find(x=>x.id===hid);return h?`<span class="badge badge-${hid}">${h.emoji}${h.name} (${RANK_PTS[i]})</span>`:''}).join(' ') : '';
-    return `<div class="event-row"><div><div class="event-name">${ev.emoji} ${ev.name}</div><div style="margin-top:3px">${detail||'<span class="badge badge-none">Awaiting result</span>'}</div></div></div>`;
+  document.getElementById('sb-team-rows').innerHTML=TEAM_EVENTS.map(ev=>{
+    const r=S.teamRankings[ev.id];
+    const detail=r?r.map((hid,i)=>{const h=HOUSES.find(x=>x.id===hid);return h?`<span class="badge badge-${hid}">${h.emoji}${h.name}(${RANK_PTS[i]})</span>`:''}).join(' '):'';
+    return `<div class="event-row"><div><div class="ev-name">${ev.emoji} ${ev.name}</div><div style="margin-top:3px">${detail||'<span class="badge badge-none">Awaiting result</span>'}</div></div></div>`;
   }).join('');
 
-  document.getElementById('sb-archery-rows').innerHTML = HOUSES.map(h=>{
-    const shots = STATE.archery.filter(a=>a.house===h.id);
-    if(shots.length===0) return `<div class="lb-row"><div class="dot" style="background:${h.color}"></div><div class="lb-name">${h.emoji} House ${h.name}</div><span class="muted">No entries yet</span></div>`;
-    const avg = shots.reduce((s,a)=>s+a.score,0)/shots.length;
-    return `<div class="lb-row"><div class="dot" style="background:${h.color}"></div><div class="lb-name">${h.emoji} House ${h.name}<div class="lb-sub">${shots.length} shots · avg ${avg.toFixed(2)}</div></div><div class="lb-pts" style="color:${h.color}">${Math.round(avg*10)}pts</div></div>`;
-  }).join('');
-
-  const nailSorted = [...STATE.nail].sort((a,b)=>a.swings-b.swings);
-  document.getElementById('sb-nail-rows').innerHTML = nailSorted.length===0
-    ? '<div class="muted" style="padding:14px;text-align:center">No entries yet, brave warriors</div>'
-    : nailSorted.slice(0,15).map((n,i)=>{
-        const h=HOUSES.find(x=>x.id===n.house);
-        return `<div class="lb-row"><div class="lb-rank">${i+1}.</div><div class="dot" style="background:${h?.color||'#888'}"></div><div class="lb-name">${esc(n.name)}</div><div class="lb-pts" style="color:${h?.color||'#888'}">${n.swings} swings · ${Math.max(0,10-n.swings)}pts</div></div>`;
-      }).join('');
-
-  // Eggs
-  document.getElementById('sb-eggs').innerHTML = HOUSES.map(h=>`
-    <div style="display:flex;align-items:center;gap:8px;padding:7px 14px;border-bottom:1px solid rgba(139,105,20,0.2)">
+  const sums=houseSumPersonal();
+  const sumRanked=HOUSES.slice().sort((a,b)=>(sums[b.id]||0)-(sums[a.id]||0));
+  document.getElementById('sb-personal-sums').innerHTML=sumRanked.map(h=>`
+    <div class="lb-row">
       <div class="dot" style="background:${h.color}"></div>
-      <div style="flex:1;font-size:14px;font-weight:600;color:var(--ink)">${h.emoji} House ${h.name}</div>
-      <div style="font-family:'Cinzel',serif;font-size:13px;font-weight:700;color:${h.color}">${STATE.eggs[h.id]||0} 🥚 = ${Math.min(30,(STATE.eggs[h.id]||0)*3)}pts</div>
+      <div class="lb-name">${h.emoji} House ${h.name}</div>
+      <div class="lb-pts" style="color:${h.color}">${sums[h.id]||0} pts</div>
     </div>`).join('');
 }
 
-// ══ ARCHERY PAGE ══
-let archSelHouse = null;
-let archSelScore = null;
-
-function renderArcheryPage() {
-  setupNameInput('arch-name','arch-sug', name => {
-    const h = STATE.playerHouses[normName(name)];
-    if(h) setArchHouse(h);
-  });
+// ══ ARCHERY ══
+let archSelHouse=null, archSelScore=null;
+function setArchHouse(h){ archSelHouse=h; document.querySelectorAll('.arch-house-btn').forEach(b=>b.classList.remove('sel')); document.querySelectorAll(`.arch-house-btn.${h}`).forEach(b=>b.classList.add('sel')); }
+function setArchScore(s,btn){ archSelScore=s; document.querySelectorAll('.arch-shot-btn').forEach(b=>b.classList.remove('sel')); btn.classList.add('sel'); }
+async function submitArchery(){
+  if(submitting)return; submitting=true;
+  const btn=document.getElementById('arch-submit-btn'); btn.disabled=true;
+  const name=document.getElementById('arch-name').value.trim();
+  if(!name){toast('Declare thy name!');submitting=false;btn.disabled=false;return;}
+  if(!archSelHouse){toast('Name thy house!');submitting=false;btn.disabled=false;return;}
+  if(!archSelScore){toast('Choose thy shot result');submitting=false;btn.disabled=false;return;}
+  if(S.archery.filter(a=>normName(a.name)===normName(name)).length>=2){toast('Thou hast already loosed thy 2 arrows!');submitting=false;btn.disabled=false;return;}
+  await fsSet('state/playerHouses',{[normName(name)]:archSelHouse});
+  await fsAdd('archery',{name,house:archSelHouse,score:archSelScore});
+  const lbl=archSelScore===3?'BULLSEYE! 🎯':archSelScore===2?'First ring! ⭕':'Hit! 🏹';
+  showSuccess('arch',`${name} — ${lbl} — ${archSelScore} honour point(s) for House ${capFirst(archSelHouse)}!`);
+  archSelScore=null; archSelHouse=null; submitting=false;
+}
+function resetArch(){ document.getElementById('arch-form').style.display=''; document.getElementById('arch-success').style.display='none'; document.getElementById('arch-name').value=''; document.getElementById('arch-submit-btn').disabled=false; archSelScore=null;archSelHouse=null; document.querySelectorAll('.arch-house-btn,.arch-shot-btn').forEach(b=>b.classList.remove('sel')); }
+function renderArcheryBoard(){
+  const sorted=HOUSES.map(h=>({h,shots:S.archery.filter(a=>a.house===h.id)})).sort((a,b)=>{const aa=a.shots.length?a.shots.reduce((s,x)=>s+x.score,0)/a.shots.length:0; const bb=b.shots.length?b.shots.reduce((s,x)=>s+x.score,0)/b.shots.length:0; return bb-aa;});
+  document.getElementById('arch-board').innerHTML=sorted.map(({h,shots})=>{
+    if(shots.length===0) return `<div class="lb-row"><div class="dot" style="background:${h.color}"></div><div class="lb-name">${h.emoji} House ${h.name}</div><span class="muted">No entries</span></div>`;
+    const avg=shots.reduce((s,a)=>s+a.score,0)/shots.length;
+    return `<div class="lb-row"><div class="dot" style="background:${h.color}"></div><div class="lb-name">${h.emoji} House ${h.name}<div class="lb-sub">${shots.length} shots · avg ${avg.toFixed(2)}</div></div><div class="lb-pts" style="color:${h.color}">${Math.round(avg*10)}pts</div></div>`;
+  }).join('');
+  const allShots=[...S.archery].sort((a,b)=>b.score-a.score);
+  document.getElementById('arch-solo-board').innerHTML=allShots.length===0?'<div class="muted" style="padding:12px 14px">No entries yet</div>':allShots.map((a,i)=>{const h=HOUSES.find(x=>x.id===a.house);const lbl=a.score===3?'🎯 Bullseye':a.score===2?'⭕ 1st Ring':'🏹 Hit';return `<div class="lb-row"><div class="lb-rank">${i+1}.</div><div class="dot" style="background:${h?.color||'#888'}"></div><div class="lb-name">${esc(a.name)}</div><div class="lb-pts" style="color:${h?.color||'#888'}">${lbl}</div></div>`;}).join('');
 }
 
-function setArchHouse(h) {
-  archSelHouse = h;
-  document.querySelectorAll('.arch-house-btn').forEach(b=>b.classList.remove('sel'));
-  document.querySelectorAll(`.arch-house-btn.${h}`).forEach(b=>b.classList.add('sel'));
-}
-
-function setArchScore(score, btn) {
-  archSelScore = score;
-  document.querySelectorAll('.arch-shot-btn').forEach(b=>b.classList.remove('sel'));
-  btn.classList.add('sel');
-}
-
-async function submitArchery() {
-  const name = document.getElementById('arch-name').value.trim();
-  if(!name){toast('Hark! Enter thy name, warrior');return;}
-  if(!archSelHouse){toast('Declare thy house!');return;}
-  if(!archSelScore){toast('Choose thy shot result');return;}
-
-  // Check 2 entry limit
-  const existing = STATE.archery.filter(a=>normName(a.name)===normName(name));
-  if(existing.length>=2){toast('Thou hast already loosed thy 2 arrows, warrior!');return;}
-
-  await fsSet('state/playerHouses', {[normName(name)]: archSelHouse});
-  STATE.playerHouses[normName(name)] = archSelHouse;
-  await fsAdd('archery', {name, house:archSelHouse, score:archSelScore});
-
-  const label = archSelScore===3?'A BULLSEYE! 🎯':archSelScore===2?'First ring! ⭕':'Hit! 🏹';
-  showArchSuccess(`${name} — ${label} — ${archSelScore} honour point(s) for House ${capFirst(archSelHouse)}!`);
-  archSelScore=null;
-  archSelHouse=null;
-}
-
-function showArchSuccess(txt) {
-  document.getElementById('arch-form').style.display='none';
-  document.getElementById('arch-success').style.display='block';
-  document.getElementById('arch-success-txt').textContent = txt;
-}
-
-function resetArch() {
-  document.getElementById('arch-form').style.display='';
-  document.getElementById('arch-success').style.display='none';
-  document.getElementById('arch-name').value='';
-  archSelScore=null; archSelHouse=null;
-  document.querySelectorAll('.arch-house-btn').forEach(b=>b.classList.remove('sel'));
-  document.querySelectorAll('.arch-shot-btn').forEach(b=>b.classList.remove('sel'));
-}
-
-// ══ NAIL PAGE ══
-let nailSelHouse = null;
-
-function renderNailPage() {
-  setupNameInput('nail-name','nail-sug', name => {
-    const h = STATE.playerHouses[normName(name)];
-    if(h) setNailHouse(h);
-  });
-}
-
-function setNailHouse(h) {
-  nailSelHouse = h;
-  document.querySelectorAll('.nail-house-btn').forEach(b=>b.classList.remove('sel'));
-  document.querySelectorAll(`.nail-house-btn.${h}`).forEach(b=>b.classList.add('sel'));
-}
-
-async function submitNail() {
-  const name = document.getElementById('nail-name').value.trim();
-  const swings = parseInt(document.getElementById('nail-swings').value);
-  if(!name){toast('Declare thy name, hammer-wielder!');return;}
-  if(!nailSelHouse){toast('Name thy house!');return;}
-  if(isNaN(swings)||swings<1){toast('Enter thy swing count');return;}
-
-  const existing = STATE.nail.filter(n=>normName(n.name)===normName(name));
-  if(existing.length>=2){toast('Thou hast already swung thy hammer twice!');return;}
-
+// ══ NAIL ══
+let nailSelHouse=null;
+function setNailHouse(h){ nailSelHouse=h; document.querySelectorAll('.nail-house-btn').forEach(b=>b.classList.remove('sel')); document.querySelectorAll(`.nail-house-btn.${h}`).forEach(b=>b.classList.add('sel')); }
+async function submitNail(){
+  if(submitting)return; submitting=true;
+  const btn=document.getElementById('nail-submit-btn'); btn.disabled=true;
+  const name=document.getElementById('nail-name').value.trim();
+  const swings=parseInt(document.getElementById('nail-swings').value);
+  if(!name){toast('Declare thy name!');submitting=false;btn.disabled=false;return;}
+  if(!nailSelHouse){toast('Name thy house!');submitting=false;btn.disabled=false;return;}
+  if(isNaN(swings)||swings<1){toast('Enter thy swing count');submitting=false;btn.disabled=false;return;}
+  if(S.nail.filter(n=>normName(n.name)===normName(name)).length>=2){toast('Thou hast already swung thy hammer twice!');submitting=false;btn.disabled=false;return;}
   await fsSet('state/playerHouses',{[normName(name)]:nailSelHouse});
-  STATE.playerHouses[normName(name)] = nailSelHouse;
   await fsAdd('nail',{name,house:nailSelHouse,swings});
-
-  const pts = Math.max(0,10-swings);
-  showNailSuccess(`${name} — ${swings} swings — ${pts} honour point(s) for House ${capFirst(nailSelHouse)}!${pts===0?' The nail resisted thee... 😬':''}`);
-  nailSelHouse=null;
+  const pts=Math.max(0,10-swings);
+  showSuccess('nail',`${name} — ${swings} swings — ${pts} honour point(s) for House ${capFirst(nailSelHouse)}!${pts===0?' The nail hath resisted thee... 😬':''}`);
+  nailSelHouse=null; submitting=false;
+}
+function resetNail(){ document.getElementById('nail-form').style.display=''; document.getElementById('nail-success').style.display='none'; document.getElementById('nail-name').value=''; document.getElementById('nail-swings').value=''; document.getElementById('nail-submit-btn').disabled=false; nailSelHouse=null; document.querySelectorAll('.nail-house-btn').forEach(b=>b.classList.remove('sel')); }
+function renderNailBoard(){
+  const sorted=[...S.nail].sort((a,b)=>a.swings-b.swings);
+  document.getElementById('nail-board').innerHTML=sorted.length===0?'<div class="muted" style="padding:12px 14px">No entries yet, brave warriors</div>':sorted.slice(0,20).map((n,i)=>{const h=HOUSES.find(x=>x.id===n.house);return `<div class="lb-row"><div class="lb-rank">${i+1}.</div><div class="dot" style="background:${h?.color||'#888'}"></div><div class="lb-name">${esc(n.name)}</div><div class="lb-pts" style="color:${h?.color||'#888'}">${n.swings} swings · ${Math.max(0,10-n.swings)}pts</div></div>`;}).join('');
 }
 
-function showNailSuccess(txt) {
-  document.getElementById('nail-form').style.display='none';
-  document.getElementById('nail-success').style.display='block';
-  document.getElementById('nail-success-txt').textContent=txt;
+function showSuccess(type,txt){
+  document.getElementById(type+'-form').style.display='none';
+  document.getElementById(type+'-success').style.display='block';
+  document.getElementById(type+'-success-txt').textContent=txt;
 }
 
-function resetNail() {
-  document.getElementById('nail-form').style.display='';
-  document.getElementById('nail-success').style.display='none';
-  document.getElementById('nail-name').value='';
-  document.getElementById('nail-swings').value='';
-  nailSelHouse=null;
-  document.querySelectorAll('.nail-house-btn').forEach(b=>b.classList.remove('sel'));
+// ══ DUELS ══
+async function issueDuel(){
+  if(submitting)return; submitting=true;
+  const btn=document.getElementById('duel-issue-btn'); btn.disabled=true;
+  const p1=document.getElementById('duel-p1').value.trim();
+  const p2=document.getElementById('duel-p2').value.trim();
+  const wager=parseInt(document.getElementById('duel-wager').value);
+  if(!p1||!p2){toast('Name both warriors!');submitting=false;btn.disabled=false;return;}
+  if(normName(p1)===normName(p2)){toast('One cannot duel oneself!');submitting=false;btn.disabled=false;return;}
+  if(isNaN(wager)||wager<1){toast('Set a worthy wager');submitting=false;btn.disabled=false;return;}
+  const p1pts=personalPoints(p1).pts;
+  if(wager>p1pts){toast(`${p1} hath not enough honour! (${p1pts} pts)`);submitting=false;btn.disabled=false;return;}
+  const p1house=S.playerHouses[normName(p1)]||null;
+  const p2house=S.playerHouses[normName(p2)]||null;
+  await fsAdd('duels',{p1,p2,p1house,p2house,wager,status:'pending',winner:null});
+  document.getElementById('duel-p1').value='';
+  document.getElementById('duel-p2').value='';
+  document.getElementById('duel-wager').value='';
+  toast('Challenge issued! Await thy opponent ⚔');
+  submitting=false; btn.disabled=false;
 }
 
-// ══ DUEL PAGE ══
-function renderDuelPage() {
-  renderPendingDuels();
-  renderDuelHistory();
+async function confirmDuel(id){
+  const duel=S.duels.find(d=>d.id===id); if(!duel)return;
+  const inp=document.getElementById('confirm-inp-'+id); if(!inp)return;
+  if(normName(inp.value)!==normName(duel.p2)){toast(`Only ${duel.p2} may confirm this challenge!`);return;}
+  const p2pts=personalPoints(duel.p2).pts;
+  if(duel.wager>p2pts){toast(`${duel.p2} hath not enough honour to accept! (${p2pts} pts)`);return;}
+  await setDoc(doc(db,'duels',id),{status:'awaiting'},{merge:true});
+  toast('Duel confirmed! Now fight! ⚔');
 }
 
-function renderPendingDuels() {
-  const pending = STATE.duels.filter(d=>d.status==='pending'||d.status==='awaiting');
-  const el = document.getElementById('pending-duels');
-  if(pending.length===0){
-    el.innerHTML='<div class="muted" style="padding:16px;text-align:center">No duels await thy courage</div>';
-    return;
-  }
-  el.innerHTML = pending.map(d=>{
-    if(d.status==='awaiting') {
-      return `<div class="duel-item">
-        <div style="font-weight:600;font-size:14px;color:var(--ink)">${esc(d.p1)} <span style="color:#e6a817">⚔</span> ${esc(d.p2)}</div>
-        <div class="muted" style="font-size:11px;margin:3px 0">Wager: ${d.wager} pts · Awaiting ${esc(d.p2)}'s confirmation</div>
-        <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
-          <button class="btn-sm" onclick="claimDuel('${d.id}','${esc(d.p1)}')">${esc(d.p1)} won ⚔</button>
-          <button class="btn-sm" onclick="claimDuel('${d.id}','${esc(d.p2)}')">${esc(d.p2)} won ⚔</button>
-        </div>
-      </div>`;
-    }
-    // pending = issued, needs p2 confirmation
+async function declineDuel(id){
+  const duel=S.duels.find(d=>d.id===id); if(!duel)return;
+  const inp=document.getElementById('confirm-inp-'+id); if(!inp)return;
+  if(normName(inp.value)!==normName(duel.p2)){toast(`Only ${duel.p2} may decline this challenge!`);return;}
+  await setDoc(doc(db,'duels',id),{status:'declined'},{merge:true});
+  toast('Duel declined — cowardice noted 🐔');
+}
+
+async function claimDuel(id,winner){
+  await setDoc(doc(db,'duels',id),{status:'done',winner},{merge:true});
+  toast(winner+' claims victory! ⚔');
+}
+
+function renderDuels(){
+  const pending=S.duels.filter(d=>d.status==='pending');
+  const awaiting=S.duels.filter(d=>d.status==='awaiting');
+  const done=S.duels.filter(d=>d.status==='done').slice().reverse();
+  const declined=S.duels.filter(d=>d.status==='declined').slice().reverse();
+  const active=[...pending,...awaiting];
+
+  document.getElementById('pending-duels').innerHTML=active.length===0?'<div class="muted" style="padding:16px;text-align:center">No duels await thy courage</div>':active.map(d=>{
+    if(d.status==='awaiting') return `<div class="duel-item">
+      <div style="font-weight:600;font-size:14px;color:var(--ink)">${esc(d.p1)} <span style="color:#e6a817">⚔</span> ${esc(d.p2)}</div>
+      <div class="muted" style="font-size:11px;margin:2px 0">Wager: ${d.wager} pts · The duel is confirmed — claim thy victor!</div>
+      <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
+        <button class="btn-sm" onclick="claimDuel('${d.id}','${esc(d.p1)}')">${esc(d.p1)} won ⚔</button>
+        <button class="btn-sm" onclick="claimDuel('${d.id}','${esc(d.p2)}')">${esc(d.p2)} won ⚔</button>
+      </div></div>`;
     return `<div class="duel-item">
       <div style="font-weight:600;font-size:14px;color:var(--ink)">${esc(d.p1)} <span style="color:#e6a817">⚔</span> ${esc(d.p2)}</div>
-      <div class="muted" style="font-size:11px;margin:3px 0">Wager: ${d.wager} pts · ${esc(d.p2)} must confirm below</div>
+      <div class="muted" style="font-size:11px;margin:2px 0">Wager: ${d.wager} pts · ${esc(d.p2)} must confirm or decline</div>
       <div style="margin-top:8px;padding:8px;background:rgba(139,105,20,0.1);border-radius:3px">
-        <div style="font-size:11px;font-family:'Cinzel',serif;color:var(--ink-light);margin-bottom:5px">ARE THOU ${esc(d.p2).toUpperCase()}? CONFIRM THE CHALLENGE:</div>
+        <div style="font-size:10px;font-family:'Cinzel',serif;color:var(--ink-light);margin-bottom:5px">ART THOU ${esc(d.p2).toUpperCase()}? SPEAK THY NAME:</div>
+        <div style="display:flex;gap:5px;flex-wrap:wrap">
+          <input class="form-input" style="font-size:14px;padding:7px 10px;flex:1;min-width:120px" type="text" id="confirm-inp-${d.id}" placeholder="${esc(d.p2)}'s name..."/>
+          <button class="btn-sm" onclick="confirmDuel('${d.id}')">Accept ⚔</button>
+          <button class="btn-sm" style="background:#2a0505;border-color:#c0392b;color:#e74c3c" onclick="declineDuel('${d.id}')">Decline 🐔</button>
+        </div>
+      </div></div>`;
+  }).join('');
+
+  document.getElementById('duel-history').innerHTML=(done.length===0&&declined.length===0)?'<div class="muted" style="padding:14px;text-align:center">No battles have yet been fought</div>':[...done,...declined].slice(0,20).map(d=>`
+    <div class="lb-row">
+      <div class="lb-name">${esc(d.p1)} vs ${esc(d.p2)}<div class="lb-sub">${d.status==='done'?'Victor: '+esc(d.winner)+' · '+d.wager+' pts':'Declined 🐔'}</div></div>
+      <div style="font-size:16px">${d.status==='done'?'✅':'🐔'}</div>
+    </div>`).join('');
+}
+
+// ══ PERSONAL ══
+async function lookupPersonal(){
+  const name=document.getElementById('personal-name').value.trim();
+  if(!name){toast('Enter thy name, warrior');return;}
+  const res=personalPoints(name);
+  const h=S.playerHouses[normName(name)];
+  const house=HOUSES.find(x=>x.id===h);
+  document.getElementById('personal-result').style.display='';
+  document.getElementById('personal-name-title').textContent='⚔ '+name+' ⚔';
+  const pv=document.getElementById('personal-pts-val');
+  pv.textContent=res.pts;
+  pv.style.color=house?house.color:'var(--ink)';
+  const pb=document.getElementById('personal-house-badge');
+  if(house){pb.textContent=house.emoji+' House '+house.name;pb.style.background=house.color;pb.style.color='#fff';}
+  else{pb.textContent='House unknown';pb.style.background='rgba(139,105,20,0.2)';pb.style.color='var(--ink-light)';}
+  document.getElementById('personal-breakdown').innerHTML=res.breakdown.map(b=>`<div class="lb-row"><div class="lb-name">${b.label}<div class="lb-sub">${b.detail}</div></div><div class="lb-pts">${b.pts>=0?'+':''}${b.pts}</div></div>`).join('');
+  document.getElementById('personal-duels').innerHTML=res.duels.length===0?'<div class="muted" style="padding:10px 14px">No duels fought yet</div>':res.duels.map(d=>{const opp=normName(d.p1)===normName(name)?d.p2:d.p1;const won=d.status==='done'&&normName(d.winner)===normName(name);const pend=d.status!=='done';return `<div class="lb-row"><div class="lb-name">${pend?'⏳':'⚔'} vs ${esc(opp)}<div class="lb-sub">Wager: ${d.wager}pts · ${pend?'Pending':won?'Victory! ✅':'Defeated ❌'}</div></div><div class="lb-pts" style="color:${won?'#1e8449':pend?'#b7770d':'#c0392b'}">${won?'+'+d.wager:pend?'?':'-'+d.wager}</div></div>`;}).join('');
+}
+
+// ══ ART ══
+function compressImage(file,maxWidth=800,quality=0.72){
+  return new Promise(resolve=>{
+    const reader=new FileReader();
+    reader.onload=e=>{
+      const img=new Image();
+      img.onload=()=>{
+        const canvas=document.createElement('canvas');
+        let w=img.width,h=img.height;
+        if(w>maxWidth){h=Math.round(h*maxWidth/w);w=maxWidth;}
+        canvas.width=w;canvas.height=h;
+        canvas.getContext('2d').drawImage(img,0,0,w,h);
+        resolve(canvas.toDataURL('image/jpeg',quality));
+      };
+      img.src=e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function getDeviceId(){
+  let id=localStorage.getItem('device_id');
+  if(!id){id='dev_'+Math.random().toString(36).slice(2);localStorage.setItem('device_id',id);}
+  return id;
+}
+
+let artFileData = null;
+window.handleArtFile = function(input) {
+  const file = input.files[0];
+  if(!file) return;
+  artFileData = file;
+  document.getElementById('art-status').textContent = '✅ ' + file.name + ' ready to submit';
+};
+
+async function submitArt(){
+  if(submitting)return; submitting=true;
+  const btn=document.getElementById('art-submit-btn'); btn.disabled=true;
+  const name=document.getElementById('art-name').value.trim();
+  const house=document.getElementById('art-house').value;
+  const file=artFileData;
+  if(!name){toast('Enter thy name!');submitting=false;btn.disabled=false;return;}
+  if(!file){toast('Capture thy masterpiece first!');submitting=false;btn.disabled=false;return;}
+  document.getElementById('art-status').textContent='Preparing thy masterpiece...';
+  const b64=await compressImage(file);
+  const kb=Math.round(b64.length*0.75/1024);
+  document.getElementById('art-status').textContent=`Submitting... (${kb}KB)`;
+  try{
+    await fsAdd('art',{image:b64,submitterName:name,submitterHouse:house,votes:{},totalScore:0,voteCount:0});
+    document.getElementById('art-status').textContent='';
+    document.getElementById('art-form').style.display='none';
+    document.getElementById('art-success').style.display='block';
+    submitting=false;
+  } catch(e){
+    document.getElementById('art-status').textContent='Error: '+e.message;
+    submitting=false;btn.disabled=false;
+  }
+}
+
+function resetArt(){
+  artFileData=null;
+  document.getElementById('art-form').style.display='';
+  document.getElementById('art-success').style.display='none';
+  document.getElementById('art-name').value='';
+  document.getElementById('art-file').value='';
+  document.getElementById('art-status').textContent='';
+  document.getElementById('art-submit-btn').disabled=false;
+}
+
+async function rateArt(artId, stars){
+  const deviceId=getDeviceId();
+  const art=S.art.find(a=>a.id===artId);
+  if(!art){toast('Artwork not found');return;}
+  const existingVotes=art.votes||{};
+  const newVotes={...existingVotes,[deviceId]:stars};
+  const scores=Object.values(newVotes);
+  const totalScore=scores.reduce((s,v)=>s+v,0);
+  const voteCount=scores.length;
+  await setDoc(doc(db,'art',artId),{votes:newVotes,totalScore,voteCount},{merge:true});
+  toast('Thy judgement hath been recorded! ⭐');
+  renderArt();
+}
+
+function renderArt(){
+  const gallery=document.getElementById('art-gallery');
+  if(!gallery)return;
+  if(S.art.length===0){gallery.innerHTML='<div class="muted" style="padding:20px;text-align:center">No masterpieces submitted yet — be the first!</div>';return;}
+  const deviceId=getDeviceId();
+  gallery.innerHTML=S.art.map(a=>{
+    const myVote=(a.votes||{})[deviceId]||0;
+    const avg=a.voteCount>0?(a.totalScore/a.voteCount).toFixed(1):'-';
+    return `<div style="margin-bottom:14px;border:2px solid var(--border);border-radius:4px;overflow:hidden;background:var(--parchment)">
+      <img src="${a.image}" style="width:100%;display:block;max-height:300px;object-fit:cover"/>
+      <div style="padding:10px 12px">
+        <div style="font-family:'Cinzel',serif;font-size:11px;color:var(--ink-light);margin-bottom:6px">Anonymous Submission · ${a.voteCount||0} votes · Avg: ${avg} ⭐</div>
+        <div style="display:flex;gap:4px;justify-content:center">
+          ${[1,2,3,4,5].map(s=>`<button onclick="rateArt('${a.id}',${s})" style="font-size:20px;background:none;border:none;cursor:pointer;opacity:${myVote>=s?'1':'0.3'};padding:2px">⭐</button>`).join('')}
+        </div>
+        ${myVote?`<div style="text-align:center;font-size:11px;font-style:italic;color:var(--ink-light);margin-top:4px">Thy rating: ${myVote} star${myVote>1?'s':''}</div>`:''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ══ RIDDLES ══
+function renderRiddles(){
+  const el=document.getElementById('riddle-list');
+  if(!el)return;
+  el.innerHTML=RIDDLES.map(r=>{
+    const rd=S.riddles[r.id]||{};
+    const released=rd.released||false;
+    const solved=rd.solved||false;
+    const hintRevealed=rd.hintRevealed||false;
+    if(!released) return `<div class="parchment riddle-card locked"><div class="riddle-lock">🔒</div><div class="riddle-num">Riddle sealed by the Grand Maester</div></div>`;
+    if(solved) return `<div class="parchment riddle-card solved">
+      <div class="riddle-num">Solved! ✅</div>
+      <div class="riddle-q">${r.q}</div>
+      <div style="margin-top:8px;padding:8px;background:rgba(30,132,73,0.1);border-radius:3px;font-family:'Cinzel',serif;font-size:11px;color:#1e8449">Winner: ${esc(rd.winnerName)} · ${esc(rd.winnerHouse?capFirst(rd.winnerHouse):'')} · ${RIDDLE_PTS} pts awarded</div>
+    </div>`;
+    return `<div class="parchment riddle-card">
+      <div class="riddle-num">Riddle the ${['First','Second','Third','Fourth','Fifth','Sixth','Seventh','Eighth','Ninth','Tenth'][RIDDLES.indexOf(r)]||''}</div>
+      <div class="riddle-q">${r.q}</div>
+      ${hintRevealed?`<div class="riddle-hint">💡 Hint: ${r.hint}</div>`:'<div class="riddle-hint-locked">Hint sealed — await the Maester\'s mercy</div>'}
+      <div style="margin-top:10px">
+        <label class="form-label" style="padding:0;margin-bottom:5px">Thy Answer</label>
         <div style="display:flex;gap:6px">
-          <div class="input-wrap" style="flex:1">
-            <input class="form-input" style="font-size:14px;padding:7px 10px" type="text" id="confirm-name-${d.id}" placeholder="${esc(d.p2)}'s name..." />
+          <input class="form-input" type="text" id="riddle-ans-${r.id}" placeholder="Speak thy answer..." style="flex:1;font-size:15px;padding:8px 10px"/>
+          <button class="btn-sm" onclick="submitRiddleAnswer('${r.id}')">Submit ⚔</button>
+        </div>
+        <div style="margin-top:6px">
+          <label class="form-label" style="padding:0;margin-bottom:4px">Thy Name</label>
+          <div class="input-wrap">
+            <input class="form-input" type="text" id="riddle-name-${r.id}" placeholder="Thy name..." style="font-size:15px;padding:8px 10px" oninput="riddleNameInput('${r.id}',this.value)"/>
+            <div class="suggestions" id="riddle-sug-${r.id}" style="display:none"></div>
           </div>
-          <button class="btn-sm" onclick="confirmDuel('${d.id}')">Confirm ⚔</button>
+        </div>
+        <div style="margin-top:4px">
+          <select class="form-input" id="riddle-house-${r.id}" style="font-size:14px;padding:8px 10px">
+            <option value="">-- Thy House --</option>
+            ${HOUSES.map(h=>`<option value="${h.id}">${h.emoji} House ${h.name}</option>`).join('')}
+          </select>
         </div>
       </div>
     </div>`;
   }).join('');
 }
 
-function renderDuelHistory() {
-  const done = STATE.duels.filter(d=>d.status==='done').slice().reverse();
-  const el = document.getElementById('duel-history');
-  if(done.length===0){el.innerHTML='<div class="muted" style="padding:14px;text-align:center">No battles have yet been fought</div>';return;}
-  el.innerHTML = done.slice(0,20).map(d=>`
-    <div class="lb-row">
-      <div class="lb-name">${esc(d.p1)} vs ${esc(d.p2)}<div class="lb-sub">Victor: ${esc(d.winner)} · ${d.wager} pts wagered</div></div>
-      <div style="color:#1e8449;font-size:16px">✅</div>
-    </div>`).join('');
+function riddleNameInput(rid, val){
+  const sug=document.getElementById('riddle-sug-'+rid);
+  const m=fuzzyMatch(val,GUESTS);
+  if(!val||m.length===0){sug.style.display='none';return;}
+  sug.innerHTML=m.map(n=>`<div data-n="${esc(n)}">${n}</div>`).join('');
+  sug.style.display='block';
+  sug.querySelectorAll('div').forEach(d=>d.addEventListener('click',()=>{ document.getElementById('riddle-name-'+rid).value=d.dataset.n; sug.style.display='none'; const h=S.playerHouses[normName(d.dataset.n)]; if(h) document.getElementById('riddle-house-'+rid).value=h; }));
 }
 
-async function issueDuel() {
-  const p1 = document.getElementById('duel-p1').value.trim();
-  const p2 = document.getElementById('duel-p2').value.trim();
-  const wager = parseInt(document.getElementById('duel-wager').value);
-  if(!p1||!p2){toast('Name both warriors!');return;}
-  if(normName(p1)===normName(p2)){toast('One cannot duel oneself, fool!');return;}
-  if(isNaN(wager)||wager<1){toast('Set a worthy wager');return;}
-
-  // Check p1 can afford it
-  const p1pts = personalPoints(p1).pts;
-  if(wager>p1pts){toast(`${p1} hath not enough honour! (${p1pts} pts available)`);return;}
-  const p1house = STATE.playerHouses[normName(p1)]||null;
-  const p2house = STATE.playerHouses[normName(p2)]||null;
-
-  await fsAdd('duels',{p1,p2,p1house,p2house,wager,status:'pending',winner:null});
-  document.getElementById('duel-p1').value='';
-  document.getElementById('duel-p2').value='';
-  document.getElementById('duel-wager').value='';
-  toast('Challenge issued! Await thy opponent ⚔');
+async function submitRiddleAnswer(rid){
+  const r=RIDDLES.find(x=>x.id===rid); if(!r)return;
+  const ans=document.getElementById('riddle-ans-'+rid).value.trim().toLowerCase();
+  const name=document.getElementById('riddle-name-'+rid).value.trim();
+  const house=document.getElementById('riddle-house-'+rid).value;
+  if(!ans){toast('Speak thy answer!');return;}
+  if(!name){toast('Enter thy name!');return;}
+  if(!house){toast('Declare thy house!');return;}
+  // Check key words
+  const correct=r.keys.some(k=>ans.includes(k.toLowerCase()));
+  if(!correct){toast('Thy answer is incorrect, mortal! Try again.');return;}
+  // Already solved?
+  if((S.riddles[rid]||{}).solved){toast('This riddle hath already been solved!');return;}
+  await fsSet('state/riddles',{[rid]:{released:true,solved:true,winnerName:name,winnerHouse:house,hintRevealed:(S.riddles[rid]||{}).hintRevealed||false}});
+  await fsSet('state/playerHouses',{[normName(name)]:house});
+  toast(`CORRECT! ${name} solves the riddle! ${RIDDLE_PTS} pts for House ${capFirst(house)}! 🏆`);
 }
 
-async function confirmDuel(id) {
-  const inp = document.getElementById('confirm-name-'+id);
-  if(!inp){toast('Error');return;}
-  const duel = STATE.duels.find(d=>d.id===id);
-  if(!duel){toast('Duel not found');return;}
-  const entered = inp.value.trim();
-  if(normName(entered)!==normName(duel.p2)){
-    toast(`That is not ${duel.p2}! Only ${duel.p2} may confirm.`);return;
-  }
-  // Check p2 can afford
-  const p2pts = personalPoints(duel.p2).pts;
-  if(duel.wager>p2pts){toast(`${duel.p2} hath not enough honour to accept! (${p2pts} pts)`);return;}
+// ══ MAESTER ══
+function showMaesterLogin(){ document.getElementById('maester-login').style.display=''; document.getElementById('maester-panel').style.display='none'; }
+function maesterLogin(){ if(document.getElementById('maester-pw').value===ADMIN_PW){adminUnlocked=true;document.getElementById('maester-login').style.display='none';document.getElementById('maester-panel').style.display='';renderMaester();}else{toast('The password is incorrect, impostor!');} }
 
-  await setDoc(doc(db,'duels',id),{status:'awaiting'},{merge:true});
-  toast('Duel confirmed! Now fight! ⚔');
-}
-
-async function claimDuel(id, winner) {
-  await setDoc(doc(db,'duels',id),{status:'done',winner},{merge:true});
-  toast(winner+' claims victory! ⚔');
-}
-
-// ══ PERSONAL PAGE ══
-function initPersonalPage() {
-  setupNameInput('personal-name','personal-sug', ()=>{});
-}
-
-async function lookupPersonal() {
-  const name = document.getElementById('personal-name').value.trim();
-  if(!name){toast('Enter thy name, warrior');return;}
-  const res = personalPoints(name);
-  const h = STATE.playerHouses[normName(name)];
-  const house = HOUSES.find(x=>x.id===h);
-
-  document.getElementById('personal-result').style.display='';
-  document.getElementById('personal-name-title').textContent = '⚔ '+name+' ⚔';
-  document.getElementById('personal-pts-val').textContent = res.pts;
-  if(house){
-    document.getElementById('personal-pts-val').style.color = house.color;
-    document.getElementById('personal-house-badge').textContent = house.emoji+' House '+house.name;
-    document.getElementById('personal-house-badge').style.background = house.color;
-    document.getElementById('personal-house-badge').style.color = '#fff';
-  } else {
-    document.getElementById('personal-pts-val').style.color = 'var(--ink)';
-    document.getElementById('personal-house-badge').textContent = 'House unknown';
-    document.getElementById('personal-house-badge').style.background = 'rgba(139,105,20,0.2)';
-    document.getElementById('personal-house-badge').style.color = 'var(--ink-light)';
-  }
-
-  document.getElementById('personal-breakdown').innerHTML = res.breakdown.map(b=>`
-    <div class="lb-row">
-      <div class="lb-name">${b.label}<div class="lb-sub">${b.detail}</div></div>
-      <div class="lb-pts">${b.pts>=0?'+':''}${b.pts}</div>
-    </div>`).join('');
-
-  const myDuels = res.duels;
-  document.getElementById('personal-duels').innerHTML = myDuels.length===0
-    ? '<div class="muted" style="padding:12px 14px">No duels fought yet</div>'
-    : myDuels.map(d=>{
-        const opp = normName(d.p1)===normName(name)?d.p2:d.p1;
-        const won = d.status==='done'&&normName(d.winner)===normName(name);
-        const pending = d.status!=='done';
-        return `<div class="lb-row">
-          <div class="lb-name">${pending?'⏳':'⚔'} vs ${esc(opp)}<div class="lb-sub">Wager: ${d.wager}pts · ${pending?'Pending':won?'Victory! ✅':'Defeated ❌'}</div></div>
-          <div class="lb-pts" style="color:${won?'#1e8449':pending?'#b7770d':'#c0392b'}">${won?'+'+d.wager:pending?'?':'-'+d.wager}</div>
-        </div>`;
-      }).join('');
-}
-
-// ══ CLERIC (ADMIN) ══
-function showClericLogin() {
-  document.getElementById('cleric-login').style.display='';
-  document.getElementById('cleric-panel').style.display='none';
-}
-
-function clericLogin() {
-  if(document.getElementById('cleric-pw').value===ADMIN_PW) {
-    adminUnlocked=true;
-    document.getElementById('cleric-login').style.display='none';
-    document.getElementById('cleric-panel').style.display='';
-    renderCleric();
-  } else { toast('The password is incorrect, impostor!'); }
-}
-
-function renderCleric() {
+function renderMaester(){
   // Team rankings
-  document.getElementById('cleric-team').innerHTML = TEAM_EVENTS.map(ev=>{
-    const ranking = STATE.teamRankings[ev.id]||[null,null,null,null];
-    return `<div class="admin-row">
-      <div class="admin-ename">${ev.emoji} ${ev.name}</div>
-      <div class="rank-legend"><span>1st=30</span><span>2nd=20</span><span>3rd=10</span><span>4th=0</span></div>
-      ${[0,1,2,3].map(place=>`
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
-          <span style="font-family:'Cinzel',serif;font-size:10px;font-weight:700;color:var(--border);width:28px">${place+1}${['st','nd','rd','th'][place]}</span>
-          <div class="house-btn-row">
-            ${HOUSES.map(h=>`<button class="hbtn ${h.id} ${ranking[place]===h.id?'sel':''}" onclick="setRank('${ev.id}',${place},'${h.id}')">${h.emoji} ${h.name}</button>`).join('')}
-          </div>
-        </div>`).join('')}
-    </div>`;
+  document.getElementById('maester-team').innerHTML=TEAM_EVENTS.map(ev=>{
+    const ranking=S.teamRankings[ev.id]||[null,null,null,null];
+    return `<div class="admin-row"><div class="admin-ename">${ev.emoji} ${ev.name}</div>
+    <div class="rank-legend"><span>1st=30</span><span>2nd=20</span><span>3rd=10</span><span>4th=0</span></div>
+    ${[0,1,2,3].map(p=>`<div style="display:flex;align-items:center;gap:5px;margin-bottom:4px">
+      <span style="font-family:'Cinzel',serif;font-size:10px;font-weight:700;color:var(--border);width:26px">${p+1}${['st','nd','rd','th'][p]}</span>
+      <div class="house-btn-row">${HOUSES.map(h=>`<button class="hbtn ${h.id} ${ranking[p]===h.id?'sel':''}" onclick="setRank('${ev.id}',${p},'${h.id}')">${h.emoji} ${h.name}</button>`).join('')}</div>
+    </div>`).join('')}</div>`;
   }).join('');
 
   // Egg totals
-  document.getElementById('cleric-egg-totals').textContent = HOUSES.map(h=>`${h.emoji} ${STATE.eggs[h.id]||0} eggs (${Math.min(30,(STATE.eggs[h.id]||0)*3)}pts)`).join('  ·  ');
+  document.getElementById('maester-egg-totals').textContent=HOUSES.map(h=>`${h.emoji} ${S.eggs[h.id]||0} eggs (${Math.min(30,(S.eggs[h.id]||0)*3)}pts)`).join(' · ');
 
   // Individual leaderboard
-  const lb = individualLeaderboard();
-  document.getElementById('cleric-indiv').innerHTML = lb.length===0
-    ? '<div class="muted" style="padding:14px;text-align:center">No individual scores yet</div>'
-    : lb.slice(0,30).map((p,i)=>{
-        const h=HOUSES.find(x=>x.id===p.house);
-        return `<div class="lb-row"><div class="lb-rank">${i+1}.</div>${h?`<div class="dot" style="background:${h.color}"></div>`:''}<div class="lb-name">${esc(p.name)}</div><div class="lb-pts" style="color:${h?.color||'var(--ink)'}">${p.pts}</div></div>`;
-      }).join('');
+  const lb=individualLeaderboard();
+  document.getElementById('maester-indiv').innerHTML=lb.length===0?'<div class="muted" style="padding:14px;text-align:center">No individual scores yet</div>':lb.slice(0,30).map((p,i)=>{const h=HOUSES.find(x=>x.id===p.house);return `<div class="lb-row"><div class="lb-rank">${i+1}.</div>${h?`<div class="dot" style="background:${h.color}"></div>`:''}<div class="lb-name">${esc(p.name)}</div><div class="lb-pts" style="color:${h?.color||'var(--ink)'}">${p.pts}</div></div>`;}).join('');
 
-  // Archery entries with delete
-  document.getElementById('cleric-arch-entries').innerHTML = STATE.archery.length===0
-    ? '<div class="muted" style="padding:10px 14px">No entries</div>'
-    : STATE.archery.map(a=>`<div class="lb-row"><div class="lb-name">${esc(a.name)}<div class="lb-sub">${capFirst(a.house)} · ${a.score===3?'Bullseye':a.score===2?'1st Ring':'Hit'}</div></div><button class="btn-del" onclick="delEntry('archery','${a.id}')">✕</button></div>`).join('');
+  // Archery entries
+  document.getElementById('maester-arch').innerHTML=S.archery.length===0?'<div class="muted" style="padding:10px 14px">No entries</div>':S.archery.map(a=>`<div class="lb-row"><div class="lb-name">${esc(a.name)}<div class="lb-sub">${capFirst(a.house)} · ${a.score===3?'Bullseye':a.score===2?'1st Ring':'Hit'}</div></div><button class="btn-del" onclick="delEntry('archery','${a.id}')">✕</button></div>`).join('');
 
-  // Nail entries with delete
-  document.getElementById('cleric-nail-entries').innerHTML = STATE.nail.length===0
-    ? '<div class="muted" style="padding:10px 14px">No entries</div>'
-    : STATE.nail.map(n=>`<div class="lb-row"><div class="lb-name">${esc(n.name)}<div class="lb-sub">${capFirst(n.house)} · ${n.swings} swings · ${Math.max(0,10-n.swings)}pts</div></div><button class="btn-del" onclick="delEntry('nail','${n.id}')">✕</button></div>`).join('');
+  // Nail entries
+  document.getElementById('maester-nail').innerHTML=S.nail.length===0?'<div class="muted" style="padding:10px 14px">No entries</div>':S.nail.map(n=>`<div class="lb-row"><div class="lb-name">${esc(n.name)}<div class="lb-sub">${capFirst(n.house)} · ${n.swings} swings · ${Math.max(0,10-n.swings)}pts</div></div><button class="btn-del" onclick="delEntry('nail','${n.id}')">✕</button></div>`).join('');
+
+  // Duels
+  document.getElementById('maester-duels').innerHTML=S.duels.length===0?'<div class="muted" style="padding:10px 14px">No duels</div>':S.duels.slice().reverse().map(d=>`<div class="lb-row"><div class="lb-name">${esc(d.p1)} vs ${esc(d.p2)}<div class="lb-sub">Wager: ${d.wager}pts · ${d.status}${d.winner?' · Winner: '+esc(d.winner):''}</div></div><button class="btn-del" onclick="delEntry('duels','${d.id}')">✕</button></div>`).join('');
+
+  // Riddles
+  document.getElementById('maester-riddles').innerHTML=RIDDLES.map(r=>{
+    const rd=S.riddles[r.id]||{};
+    return `<div class="admin-row">
+      <div class="admin-ename" style="font-size:11px;margin-bottom:4px">${r.q.slice(0,60)}...</div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center">
+        <button class="btn-sm ${rd.released?'':'btn-green'}" onclick="toggleRiddle('${r.id}',${!rd.released})">${rd.released?'🔒 Lock':'🔓 Release'}</button>
+        <button class="btn-sm" onclick="toggleHint('${r.id}',${!rd.hintRevealed})">${rd.hintRevealed?'Hide Hint':'💡 Reveal Hint'}</button>
+        ${rd.solved?`<span class="muted" style="font-size:11px">✅ Solved by ${esc(rd.winnerName)}</span>`:'<span class="muted" style="font-size:11px">Unsolved</span>'}
+      </div>
+    </div>`;
+  }).join('');
+
+  // Art gallery (with names + ratings for maester)
+  document.getElementById('maester-art').innerHTML=S.art.length===0?'<div class="muted" style="padding:14px;text-align:center">No submissions yet</div>':S.art.map((a,i)=>{
+    const avg=a.voteCount>0?(a.totalScore/a.voteCount).toFixed(2):'-';
+    const votes=Object.values(a.votes||{});
+    return `<div style="margin-bottom:12px;border:2px solid var(--border);border-radius:4px;overflow:hidden;background:var(--parchment)">
+      <img src="${a.image}" style="width:100%;display:block;max-height:200px;object-fit:cover"/>
+      <div style="padding:8px 12px">
+        <div style="font-weight:600;color:var(--ink);font-size:14px">#${i+1} — ${esc(a.submitterName)} · ${capFirst(a.submitterHouse||'unknown')}</div>
+        <div class="muted" style="font-size:11px">${a.voteCount||0} votes · Avg: ${avg} ⭐ · Scores: ${votes.join(', ')||'none'}</div>
+        <button class="btn-del" style="margin-top:6px" onclick="delEntry('art','${a.id}')">✕ Remove</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  // QR codes
+  renderQR();
 }
 
-async function setRank(eventId, place, houseId) {
-  const r = [...(STATE.teamRankings[eventId]||[null,null,null,null])];
-  const existing = r.indexOf(houseId);
-  if(existing!==-1) r[existing]=null;
-  r[place] = r[place]===houseId ? null : houseId;
-  STATE.teamRankings[eventId]=r;
+async function setRank(eventId,place,houseId){
+  const r=[...(S.teamRankings[eventId]||[null,null,null,null])];
+  const ex=r.indexOf(houseId); if(ex!==-1)r[ex]=null;
+  r[place]=r[place]===houseId?null:houseId;
+  S.teamRankings[eventId]=r;
   await fsSet('state/teamRankings',{[eventId]:r});
-  renderCleric();
+  renderMaester();
 }
+async function addEggs(){ const h=document.getElementById('egg-house').value; const n=parseInt(document.getElementById('egg-count').value); if(isNaN(n)||n<1){toast('Enter egg count');return;} S.eggs[h]=(S.eggs[h]||0)+n; await fsSet('state/eggs',{[h]:S.eggs[h]}); toast(`+${n} egg(s) for House ${capFirst(h)}! 🥚`); renderMaester(); }
+async function addBonus(){ const h=document.getElementById('bonus-house').value; const p=parseInt(document.getElementById('bonus-pts').value); if(isNaN(p)){toast('Enter points');return;} S.bonus[h]=(S.bonus[h]||0)+p; await fsSet('state/bonus',{[h]:S.bonus[h]}); toast(`${p>0?'+':''}${p} pts to House ${capFirst(h)}`); }
+async function delEntry(col,id){ if(!confirm('Remove this entry from the scrolls?'))return; await fsDel(col,id); toast('Entry struck from the record'); }
+async function toggleRiddle(rid,val){ await fsSet('state/riddles',{[rid]:{...(S.riddles[rid]||{}),released:val}}); renderMaester(); renderRiddles(); toast(val?'Riddle released!':'Riddle sealed'); }
+async function toggleHint(rid,val){ await fsSet('state/riddles',{[rid]:{...(S.riddles[rid]||{}),hintRevealed:val}}); renderMaester(); renderRiddles(); toast(val?'Hint revealed!':'Hint hidden'); }
+async function confirmReset(){ if(!confirm('Reset ALL tournament data? This cannot be undone.'))return; const cols=['archery','nail','duels','art','photo_test']; for(const col of cols){const s=await getDocs(collection(db,col));for(const d of s.docs)await deleteDoc(d.ref);} await setDoc(doc(db,'state','teamRankings'),{}); await setDoc(doc(db,'state','eggs'),{dragon:0,wolf:0,snake:0,lion:0}); await setDoc(doc(db,'state','bonus'),{dragon:0,wolf:0,snake:0,lion:0}); await setDoc(doc(db,'state','playerHouses'),{}); await setDoc(doc(db,'state','riddles'),{}); toast('The scrolls have been wiped clean'); renderMaester(); }
 
-async function addEggs() {
-  const h=document.getElementById('egg-house').value;
-  const n=parseInt(document.getElementById('egg-count').value);
-  if(isNaN(n)||n<1){toast('Enter egg count');return;}
-  STATE.eggs[h]=(STATE.eggs[h]||0)+n;
-  await fsSet('state/eggs',{[h]:STATE.eggs[h]});
-  toast(`+${n} egg(s) for House ${capFirst(h)}! 🥚`);
-  renderCleric();
-}
-
-async function addBonus() {
-  const h=document.getElementById('bonus-house').value;
-  const p=parseInt(document.getElementById('bonus-pts').value);
-  if(isNaN(p)){toast('Enter points');return;}
-  STATE.bonus[h]=(STATE.bonus[h]||0)+p;
-  await fsSet('state/bonus',{[h]:STATE.bonus[h]});
-  toast(`${p>0?'+':''}${p} honour points to House ${capFirst(h)}`);
-}
-
-async function delEntry(col, id) {
-  if(!confirm('Remove this entry from the scrolls?')) return;
-  await fsDel(col, id);
-  toast('Entry struck from the record');
-}
-
-async function confirmReset() {
-  if(!confirm('Reset ALL tournament data? This cannot be undone.')) return;
-  const cols = ['archery','nail','duels'];
-  for(const col of cols) {
-    const snap = await getDocs(collection(db,col));
-    for(const d of snap.docs) await deleteDoc(d.ref);
-  }
-  await setDoc(doc(db,'state','teamRankings'),{});
-  await setDoc(doc(db,'state','eggs'),{dragon:0,wolf:0,snake:0,lion:0});
-  await setDoc(doc(db,'state','bonus'),{dragon:0,wolf:0,snake:0,lion:0});
-  await setDoc(doc(db,'state','playerHouses'),{});
-  toast('The scrolls have been wiped clean');
-  renderCleric();
-}
-
-// ══ PHOTO TEST INIT ══
-function initPhotoTest() {
-  const btn = document.getElementById('photo-test-upload-btn');
-  const inp = document.getElementById('photo-test-input');
-  if(!btn||!inp) return;
-  // Prevent double binding
-  btn.replaceWith(btn.cloneNode(true));
-  const newBtn = document.getElementById('photo-test-upload-btn');
-  newBtn.addEventListener('click', () => {
-    const file = inp.files[0];
-    if(!file) { toast('Pick a photo first'); return; }
-    uploadTestPhoto(file);
-  });
-}
-
-// ══ QR CODES ══
-function renderQR() {
-  const base = window.location.href.split('?')[0].split('#')[0];
-  const stations = [
-    {label:'🏆 Scoreboard',    desc:'Live house standings',         param:'view=scoreboard'},
-    {label:'👤 My Points',     desc:'Check thy personal honour',    param:'view=personal'},
-    {label:'⚔ Duel Station',  desc:'Challenge a fellow warrior',   param:'view=duel'},
-    {label:'🏹 Archery Range', desc:'Submit thy shot result',       param:'view=archery'},
-    {label:'🔨 Nail Into Log', desc:'Record thy swing count',       param:'view=nail'},
-    {label:'💪 Tug of War',    desc:'Result entered by the Cleric', param:'view=scoreboard'},
-    {label:'🏃 Wheelbarrow',   desc:'Result entered by the Cleric', param:'view=scoreboard'},
-    {label:'🪣 Fill a Tub',    desc:'Result entered by the Cleric', param:'view=scoreboard'},
-    {label:'🤺 Pool Joust',    desc:'Result entered by the Cleric', param:'view=scoreboard'},
+// ══ QR ══
+function renderQR(){
+  const base=window.location.href.split('?')[0].split('#')[0];
+  const stations=[
+    {label:'⚔ Standings',      desc:'Live house standings',          param:'view=scoreboard'},
+    {label:'👤 My Honour',     desc:'Check thy personal points',     param:'view=personal'},
+    {label:'⚔ Duel Station',  desc:'Challenge a fellow warrior',    param:'view=duel'},
+    {label:'🏹 Archery Range', desc:'Submit thy shot',               param:'view=archery'},
+    {label:'🔨 Nail Into Log', desc:'Record thy swings',             param:'view=nail'},
+    {label:'🎨 Art Challenge', desc:'Submit thy masterpiece',        param:'view=art'},
+    {label:'🧠 Trials of Mind',desc:'Test thy wits',                 param:'view=riddles'},
   ];
-  const grid = document.getElementById('qr-grid');
+  const grid=document.getElementById('maester-qr-grid');
+  if(!grid)return;
   grid.innerHTML='';
   stations.forEach(s=>{
-    const url = base+'?'+s.param;
-    const safeId = 'qr_'+btoa(s.param).replace(/[^a-z0-9]/gi,'_');
-    const card = document.createElement('div');
+    const url=base+'?'+s.param;
+    const safeId='qr_'+Math.random().toString(36).slice(2);
+    const card=document.createElement('div');
     card.className='parchment qr-card';
     card.innerHTML=`<h3>${s.label}</h3><p>${s.desc}</p><div class="qr-wrap" id="${safeId}"></div>`;
     grid.appendChild(card);
-    setTimeout(()=>{
-      try{new QRCode(document.getElementById(safeId),{text:url,width:110,height:110,colorDark:'#1a1208',colorLight:'#f2e8d0',correctLevel:QRCode.CorrectLevel.M});}catch(e){}
-    },80);
+    setTimeout(()=>{ try{new QRCode(document.getElementById(safeId),{text:url,width:110,height:110,colorDark:'#1a1208',colorLight:'#f2e8d0',correctLevel:QRCode.CorrectLevel.M});}catch(e){} },80);
   });
-}
-
-// ══ PHOTO TEST ══
-async function uploadTestPhoto(file) {
-  const status = document.getElementById('photo-test-status');
-  if(!file) return;
-  status.textContent = 'Compressing...';
-  const b64 = await compressImage(file, 800, 0.7);
-  const kb = Math.round(b64.length * 0.75 / 1024);
-  status.textContent = `Uploading... (${kb}KB)`;
-  try {
-    await fsAdd('photo_test', {image: b64, votes: 0});
-    status.textContent = `✅ Upload success! (${kb}KB) — check gallery below`;
-  } catch(e) {
-    status.textContent = '❌ Error: ' + e.message;
-  }
-}
-
-function compressImage(file, maxWidth=800, quality=0.7) {
-  return new Promise(resolve => {
-    const reader = new FileReader();
-    reader.onload = e => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        let w = img.width, h = img.height;
-        if(w > maxWidth) { h = Math.round(h * maxWidth / w); w = maxWidth; }
-        canvas.width = w; canvas.height = h;
-        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-        resolve(canvas.toDataURL('image/jpeg', quality));
-      };
-      img.src = e.target.result;
-    };
-    reader.readAsDataURL(file);
-  });
-}
-
-onSnapshot(collection(db,'photo_test'), snap => {
-  const gallery = document.getElementById('photo-test-gallery');
-  if(!gallery) return;
-  gallery.innerHTML = '';
-  snap.docs.forEach(d => {
-    const data = d.data();
-    const div = document.createElement('div');
-    div.style.cssText = 'margin-bottom:10px;border:2px solid var(--border);border-radius:4px;overflow:hidden;background:var(--parchment)';
-    div.innerHTML = `<img src="${data.image}" style="width:100%;display:block"/><div style="padding:8px;display:flex;justify-content:space-between;align-items:center"><span style="font-size:12px;font-style:italic;color:var(--ink-light)">Votes: ${data.votes||0}</span><button class="btn-sm" data-id="${d.id}">👍 Vote</button></div>`;
-    div.querySelector('button').addEventListener('click', async () => {
-      await setDoc(doc(db,'photo_test',d.id),{votes:(data.votes||0)+1},{merge:true});
-    });
-    gallery.appendChild(div);
-  });
-});
-
-// ══ URL PARAMS ══
-function handleParams() {
-  const p = new URLSearchParams(window.location.search);
-  const v = p.get('view');
-  if(v) showView(v);
 }
 
 // ══ UTILS ══
-function toast(msg) {
-  const t=document.getElementById('toast');
-  t.textContent=msg;
-  t.classList.add('show');
-  setTimeout(()=>t.classList.remove('show'),3000);
-}
-function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
-function capFirst(s){return s?s[0].toUpperCase()+s.slice(1):s;}
 function showLoading(on){document.getElementById('loading').style.display=on?'flex':'none';}
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),3200);}
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function capFirst(s){return s?s[0].toUpperCase()+s.slice(1):s;}
 
-// ══ INIT ══
+function handleParams(){
+  const p=new URLSearchParams(window.location.search);
+  const v=p.get('view');
+  if(v)showView(v);
+}
+
+// ══ EXPOSE ══
 window.showView=showView;
-window.setArchHouse=setArchHouse;
-window.setArchScore=setArchScore;
-window.submitArchery=submitArchery;
-window.resetArch=resetArch;
-window.setNailHouse=setNailHouse;
-window.submitNail=submitNail;
-window.resetNail=resetNail;
-window.issueDuel=issueDuel;
-window.confirmDuel=confirmDuel;
-window.claimDuel=claimDuel;
+window.setArchHouse=setArchHouse; window.setArchScore=setArchScore; window.submitArchery=submitArchery; window.resetArch=resetArch;
+window.setNailHouse=setNailHouse; window.submitNail=submitNail; window.resetNail=resetNail;
+window.issueDuel=issueDuel; window.confirmDuel=confirmDuel; window.declineDuel=declineDuel; window.claimDuel=claimDuel;
 window.lookupPersonal=lookupPersonal;
-window.clericLogin=clericLogin;
-window.setRank=setRank;
-window.addEggs=addEggs;
-window.addBonus=addBonus;
-window.delEntry=delEntry;
-window.confirmReset=confirmReset;
+window.submitArt=submitArt; window.resetArt=resetArt; window.rateArt=rateArt;
+window.renderRiddles=renderRiddles; window.submitRiddleAnswer=submitRiddleAnswer; window.riddleNameInput=riddleNameInput;
+window.maesterLogin=maesterLogin; window.setRank=setRank; window.addEggs=addEggs; window.addBonus=addBonus; window.delEntry=delEntry; window.toggleRiddle=toggleRiddle; window.toggleHint=toggleHint; window.confirmReset=confirmReset;
 
 await loadAll();
 startListeners();
-// Setup all name inputs
-setupNameInput('duel-p1','duel-sug1', name => {});
-setupNameInput('duel-p2','duel-sug2', name => {});
-setupNameInput('personal-name','personal-sug', ()=>{});
-setupNameInput('arch-name','arch-sug', name => {
-  const h = STATE.playerHouses[normName(name)];
-  if(h) setArchHouse(h);
-});
-setupNameInput('nail-name','nail-sug', name => {
-  const h = STATE.playerHouses[normName(name)];
-  if(h) setNailHouse(h);
-});
 handleParams();
-if(currentView==='scoreboard') renderScoreboard();
+if(currentView==='scoreboard')renderScoreboard();
 
-document.addEventListener('click',e=>{
-  if(!e.target.closest('.input-wrap')) document.querySelectorAll('.suggestions').forEach(s=>s.style.display='none');
-});
+document.addEventListener('click',e=>{ if(!e.target.closest('.input-wrap'))document.querySelectorAll('.suggestions').forEach(s=>s.style.display='none'); });
 </script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap');
-:root{
-  --parchment:#f2e8d0;--parchment-dark:#e0d0a8;--ink:#1a1208;--ink-light:#3d2b0e;
-  --dragon:#c0392b;--wolf:#2471a3;--snake:#1e8449;--lion:#b7770d;--border:#8b6914;
-}
+:root{--parchment:#f2e8d0;--parchment-dark:#e0d0a8;--ink:#1a1208;--ink-light:#3d2b0e;--dragon:#c0392b;--wolf:#2471a3;--snake:#1e8449;--lion:#b7770d;--border:#8b6914;}
 *{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:'Crimson Text',Georgia,serif;background:#2c1a08;min-height:100vh;color:var(--ink);padding-bottom:30px;}
 .view{display:none;}.view.active{display:block;}
-nav{background:#1a0f05;border-bottom:2px solid var(--border);padding:8px 8px;display:flex;gap:5px;flex-wrap:wrap;justify-content:center;position:sticky;top:0;z-index:100;}
-.nav-btn{font-family:'Cinzel',serif;font-size:9px;font-weight:700;letter-spacing:0.04em;padding:6px 8px;border:1px solid var(--border);border-radius:2px;cursor:pointer;background:transparent;color:var(--parchment-dark);text-transform:uppercase;transition:all 0.15s;}
+nav{background:#1a0f05;border-bottom:2px solid var(--border);padding:7px 8px;display:flex;gap:4px;flex-wrap:wrap;justify-content:center;position:sticky;top:0;z-index:100;}
+.nav-btn{font-family:'Cinzel',serif;font-size:9px;font-weight:700;letter-spacing:0.03em;padding:5px 8px;border:1px solid var(--border);border-radius:2px;cursor:pointer;background:transparent;color:var(--parchment-dark);text-transform:uppercase;transition:all 0.15s;}
 .nav-btn:hover,.nav-btn.active{background:var(--border);color:var(--ink);}
 .parchment{background:var(--parchment);border:2px solid var(--border);border-radius:4px;box-shadow:0 4px 20px rgba(0,0,0,0.5),inset 0 0 30px rgba(139,105,20,0.1);}
 .page{max-width:560px;margin:0 auto;padding:14px 14px 0;}
 .page-title{text-align:center;margin-bottom:14px;}
-.page-title h1{font-family:'Cinzel',serif;font-size:19px;font-weight:900;color:var(--parchment);text-shadow:0 2px 8px rgba(0,0,0,0.8);letter-spacing:0.06em;line-height:1.2;}
-.page-title p{color:#e6a817;font-style:italic;font-size:13px;margin-top:4px;}
+.page-title h1{font-family:'Cinzel',serif;font-size:18px;font-weight:900;color:var(--parchment);text-shadow:0 2px 8px rgba(0,0,0,0.8);letter-spacing:0.05em;line-height:1.25;}
+.page-title p{color:#e6a817;font-style:italic;font-size:12px;margin-top:4px;}
 .section{margin-bottom:12px;}
 .section-title{font-family:'Cinzel',serif;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#e6a817;text-align:center;padding:9px 12px;border-bottom:1px solid var(--border);}
-.event-row{display:flex;justify-content:space-between;align-items:center;padding:9px 14px;border-bottom:1px solid rgba(139,105,20,0.25);gap:10px;flex-wrap:wrap;}
-.event-row:last-child{border-bottom:none;}
-.event-name{font-size:14px;font-weight:600;color:var(--ink);}
-.badge{font-family:'Cinzel',serif;font-size:10px;font-weight:700;padding:2px 7px;border-radius:2px;white-space:nowrap;text-transform:uppercase;display:inline-block;margin:1px;}
-.badge-dragon{background:var(--dragon);color:#fff;}.badge-wolf{background:var(--wolf);color:#fff;}
-.badge-snake{background:var(--snake);color:#fff;}.badge-lion{background:var(--lion);color:#fff;}
-.badge-none{background:rgba(139,105,20,0.2);color:var(--ink-light);}
 .houses-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;}
 .house-card{padding:12px 10px;border-radius:4px;border:2px solid;text-align:center;}
-.house-card.dragon{border-color:var(--dragon);background:#180404;}
-.house-card.wolf{border-color:var(--wolf);background:#020b14;}
-.house-card.snake{border-color:var(--snake);background:#021005;}
-.house-card.lion{border-color:var(--lion);background:#160e01;}
+.house-card.dragon{border-color:var(--dragon);background:#180404;}.house-card.wolf{border-color:var(--wolf);background:#020b14;}
+.house-card.snake{border-color:var(--snake);background:#021005;}.house-card.lion{border-color:var(--lion);background:#160e01;}
 .h-emoji{font-size:26px;display:block;}
 .h-name{font-family:'Cinzel',serif;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;margin:3px 0;}
 .house-card.dragon .h-name,.house-card.dragon .h-pts{color:var(--dragon);}
-.house-card.wolf   .h-name,.house-card.wolf   .h-pts{color:var(--wolf);}
-.house-card.snake  .h-name,.house-card.snake  .h-pts{color:var(--snake);}
-.house-card.lion   .h-name,.house-card.lion   .h-pts{color:var(--lion);}
+.house-card.wolf .h-name,.house-card.wolf .h-pts{color:var(--wolf);}
+.house-card.snake .h-name,.house-card.snake .h-pts{color:var(--snake);}
+.house-card.lion .h-name,.house-card.lion .h-pts{color:var(--lion);}
 .h-pts{font-family:'Cinzel',serif;font-size:32px;font-weight:900;line-height:1;}
 .h-rank{font-size:11px;font-style:italic;color:var(--parchment-dark);opacity:0.7;margin-top:3px;}
-.form-label{font-family:'Cinzel',serif;font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--ink-light);padding:0 14px;display:block;margin-bottom:5px;}
+.event-row{padding:9px 14px;border-bottom:1px solid rgba(139,105,20,0.25);}.event-row:last-child{border-bottom:none;}
+.ev-name{font-size:14px;font-weight:600;color:var(--ink);}
+.badge{font-family:'Cinzel',serif;font-size:10px;font-weight:700;padding:2px 6px;border-radius:2px;white-space:nowrap;text-transform:uppercase;display:inline-block;margin:1px;}
+.badge-dragon{background:var(--dragon);color:#fff;}.badge-wolf{background:var(--wolf);color:#fff;}
+.badge-snake{background:var(--snake);color:#fff;}.badge-lion{background:var(--lion);color:#fff;}
+.badge-none{background:rgba(139,105,20,0.2);color:var(--ink-light);}
+.lb-row{display:flex;align-items:center;padding:8px 14px;border-bottom:1px solid rgba(139,105,20,0.2);gap:8px;font-size:14px;}.lb-row:last-child{border-bottom:none;}
+.lb-rank{font-family:'Cinzel',serif;font-size:11px;font-weight:700;color:var(--border);width:22px;flex-shrink:0;}
+.lb-name{flex:1;font-weight:600;color:var(--ink);}
+.lb-sub{font-size:11px;font-style:italic;color:var(--ink-light);font-weight:400;margin-top:1px;}
+.lb-pts{font-family:'Cinzel',serif;font-size:13px;font-weight:700;flex-shrink:0;}
+.dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
+.muted{font-size:13px;font-style:italic;color:var(--ink-light);}
+.form-label{font-family:'Cinzel',serif;font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--ink-light);display:block;margin-bottom:5px;}
 .form-input{width:100%;padding:10px 14px;border:none;border-top:1px solid rgba(139,105,20,0.3);border-bottom:1px solid rgba(139,105,20,0.3);background:rgba(139,105,20,0.07);font-family:'Crimson Text',serif;font-size:17px;color:var(--ink);outline:none;}
 .form-input:focus{background:rgba(139,105,20,0.14);border-color:var(--border);}
 .form-group{margin-bottom:12px;}
@@ -861,56 +768,48 @@ nav{background:#1a0f05;border-bottom:2px solid var(--border);padding:8px 8px;dis
 .house-picker{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:0 14px;}
 .hpick-btn{padding:10px 4px;border:2px solid;border-radius:3px;font-family:'Cinzel',serif;font-size:10px;font-weight:700;cursor:pointer;background:transparent;text-align:center;line-height:1.4;transition:all 0.15s;}
 .hpick-btn .pe{font-size:18px;display:block;margin-bottom:2px;}
-.hpick-btn.dragon{border-color:var(--dragon);color:var(--dragon);}
-.hpick-btn.wolf{border-color:var(--wolf);color:var(--wolf);}
-.hpick-btn.snake{border-color:var(--snake);color:var(--snake);}
-.hpick-btn.lion{border-color:var(--lion);color:var(--lion);}
-.hpick-btn.sel.dragon{background:var(--dragon);color:#fff;}
-.hpick-btn.sel.wolf{background:var(--wolf);color:#fff;}
-.hpick-btn.sel.snake{background:var(--snake);color:#fff;}
-.hpick-btn.sel.lion{background:var(--lion);color:#fff;}
+.hpick-btn.dragon{border-color:var(--dragon);color:var(--dragon);}.hpick-btn.wolf{border-color:var(--wolf);color:var(--wolf);}
+.hpick-btn.snake{border-color:var(--snake);color:var(--snake);}.hpick-btn.lion{border-color:var(--lion);color:var(--lion);}
+.hpick-btn.sel.dragon{background:var(--dragon);color:#fff;}.hpick-btn.sel.wolf{background:var(--wolf);color:#fff;}
+.hpick-btn.sel.snake{background:var(--snake);color:#fff;}.hpick-btn.sel.lion{background:var(--lion);color:#fff;}
 .arch-shot-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:0 14px;}
 .arch-shot-btn{padding:14px 6px;border:2px solid var(--border);border-radius:3px;font-family:'Cinzel',serif;font-size:11px;font-weight:700;cursor:pointer;background:transparent;color:var(--ink);text-align:center;transition:all 0.15s;}
 .arch-shot-btn .ai{font-size:22px;display:block;margin-bottom:4px;}
 .arch-shot-btn.sel{background:var(--ink);color:var(--parchment);border-color:var(--ink);}
 .btn-primary{display:block;width:calc(100% - 28px);margin:12px 14px 0;padding:13px;background:var(--ink);color:var(--parchment);border:2px solid var(--border);font-family:'Cinzel',serif;font-size:13px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer;border-radius:3px;transition:all 0.15s;}
-.btn-primary:hover{background:var(--border);color:var(--ink);}
+.btn-primary:hover{background:var(--border);color:var(--ink);}.btn-primary:disabled{opacity:0.4;cursor:not-allowed;}
 .btn-sm{padding:7px 12px;background:var(--ink);color:var(--parchment);border:1px solid var(--border);font-family:'Cinzel',serif;font-size:10px;font-weight:700;cursor:pointer;border-radius:3px;letter-spacing:0.04em;white-space:nowrap;transition:all 0.15s;}
 .btn-sm:hover{background:var(--border);color:var(--ink);}
+.btn-green{background:#1e8449!important;border-color:#1e8449!important;}
 .btn-del{padding:4px 8px;background:#2a0505;color:#e74c3c;border:1px solid #c0392b;border-radius:3px;font-size:11px;cursor:pointer;flex-shrink:0;}
 .success-block{text-align:center;padding:24px 14px;display:none;}
 .success-block .s-icon{font-size:42px;margin-bottom:8px;}
 .success-block h2{font-family:'Cinzel',serif;font-size:17px;font-weight:700;color:var(--ink);margin-bottom:6px;}
 .success-block p{color:var(--ink-light);font-style:italic;font-size:14px;line-height:1.5;}
-.lb-row{display:flex;align-items:center;padding:8px 14px;border-bottom:1px solid rgba(139,105,20,0.2);gap:8px;font-size:14px;}
-.lb-row:last-child{border-bottom:none;}
-.lb-rank{font-family:'Cinzel',serif;font-size:11px;font-weight:700;color:var(--border);width:22px;flex-shrink:0;}
-.lb-name{flex:1;font-weight:600;color:var(--ink);}
-.lb-sub{font-size:11px;font-style:italic;color:var(--ink-light);font-weight:400;margin-top:1px;}
-.lb-pts{font-family:'Cinzel',serif;font-size:13px;font-weight:700;flex-shrink:0;}
-.dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
-.muted{font-size:13px;font-style:italic;color:var(--ink-light);}
-.duel-item{padding:12px 14px;border-bottom:1px solid rgba(139,105,20,0.2);}
-.duel-item:last-child{border-bottom:none;}
+.duel-item{padding:12px 14px;border-bottom:1px solid rgba(139,105,20,0.2);}.duel-item:last-child{border-bottom:none;}
 .duel-vs{text-align:center;font-family:'Cinzel',serif;font-size:20px;font-weight:900;color:#e6a817;padding:6px 0;}
 .personal-pts{font-family:'Cinzel',serif;font-size:52px;font-weight:900;line-height:1;margin:8px 0;}
 .personal-house-badge{display:inline-block;padding:4px 14px;border-radius:2px;font-family:'Cinzel',serif;font-size:12px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;margin-top:6px;}
+/* RIDDLES */
+.riddle-card{padding:14px;margin-bottom:10px;}
+.riddle-card.locked{text-align:center;padding:20px;opacity:0.6;}
+.riddle-card.solved{border-color:#1e8449;}
+.riddle-lock{font-size:28px;margin-bottom:4px;}
+.riddle-num{font-family:'Cinzel',serif;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--border);margin-bottom:8px;}
+.riddle-q{font-size:15px;font-style:italic;color:var(--ink);line-height:1.6;}
+.riddle-hint{margin-top:8px;padding:8px;background:rgba(139,105,20,0.12);border-radius:3px;font-size:13px;font-style:italic;color:var(--ink-light);}
+.riddle-hint-locked{margin-top:8px;font-size:12px;font-style:italic;color:rgba(139,105,20,0.5);}
 /* ADMIN */
-.admin-row{padding:10px 14px;border-bottom:1px solid rgba(139,105,20,0.2);}
-.admin-row:last-child{border-bottom:none;}
+.admin-row{padding:10px 14px;border-bottom:1px solid rgba(139,105,20,0.2);}.admin-row:last-child{border-bottom:none;}
 .admin-ename{font-family:'Cinzel',serif;font-size:12px;font-weight:700;color:var(--ink);margin-bottom:5px;}
 .rank-legend{display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap;}
 .rank-legend span{font-size:10px;font-style:italic;color:var(--ink-light);background:rgba(139,105,20,0.1);padding:2px 5px;border-radius:2px;}
 .house-btn-row{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;flex:1;}
 .hbtn{padding:6px 3px;border:2px solid;border-radius:3px;font-family:'Cinzel',serif;font-size:9px;font-weight:700;cursor:pointer;background:transparent;text-align:center;transition:all 0.15s;line-height:1.3;}
-.hbtn.dragon{border-color:var(--dragon);color:var(--dragon);}
-.hbtn.wolf{border-color:var(--wolf);color:var(--wolf);}
-.hbtn.snake{border-color:var(--snake);color:var(--snake);}
-.hbtn.lion{border-color:var(--lion);color:var(--lion);}
-.hbtn.sel.dragon{background:var(--dragon);color:#fff;}
-.hbtn.sel.wolf{background:var(--wolf);color:#fff;}
-.hbtn.sel.snake{background:var(--snake);color:#fff;}
-.hbtn.sel.lion{background:var(--lion);color:#fff;}
+.hbtn.dragon{border-color:var(--dragon);color:var(--dragon);}.hbtn.wolf{border-color:var(--wolf);color:var(--wolf);}
+.hbtn.snake{border-color:var(--snake);color:var(--snake);}.hbtn.lion{border-color:var(--lion);color:var(--lion);}
+.hbtn.sel.dragon{background:var(--dragon);color:#fff;}.hbtn.sel.wolf{background:var(--wolf);color:#fff;}
+.hbtn.sel.snake{background:var(--snake);color:#fff;}.hbtn.sel.lion{background:var(--lion);color:#fff;}
 .bonus-row{display:flex;gap:6px;align-items:center;flex-wrap:wrap;}
 .bonus-row select,.bonus-row input{padding:7px 8px;border:1px solid var(--border);border-radius:3px;background:var(--parchment-dark);font-family:'Crimson Text',serif;font-size:14px;color:var(--ink);}
 .bonus-row input{width:65px;font-family:'Cinzel',serif;}
@@ -921,79 +820,66 @@ nav{background:#1a0f05;border-bottom:2px solid var(--border);padding:8px 8px;dis
 .qr-card h3{font-family:'Cinzel',serif;font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--ink);margin-bottom:3px;}
 .qr-card p{font-size:10px;color:var(--ink-light);font-style:italic;margin-bottom:8px;line-height:1.3;}
 .qr-wrap{display:flex;justify-content:center;}
+/* FILE INPUT */
+.file-upload-area{padding:0 14px;}
+.file-btn{display:block;width:100%;padding:12px;margin-bottom:8px;border:2px dashed var(--border);border-radius:3px;background:rgba(139,105,20,0.06);font-family:'Cinzel',serif;font-size:12px;font-weight:700;color:var(--ink-light);text-align:center;cursor:pointer;letter-spacing:0.06em;}
+.file-btn:hover{background:rgba(139,105,20,0.12);}
+input[type=file]{display:none;}
 /* LOADING */
-#loading{position:fixed;inset:0;background:rgba(26,9,2,0.85);display:flex;align-items:center;justify-content:center;z-index:9999;flex-direction:column;gap:14px;}
+#loading{position:fixed;inset:0;background:rgba(26,9,2,0.88);display:flex;align-items:center;justify-content:center;z-index:9999;flex-direction:column;gap:14px;}
 #loading p{font-family:'Cinzel',serif;font-size:14px;color:var(--parchment);letter-spacing:0.08em;}
 .spinner{width:36px;height:36px;border:3px solid rgba(139,105,20,0.3);border-top-color:var(--border);border-radius:50%;animation:spin 0.8s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg);}}
-.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(100px);background:var(--ink);color:var(--parchment);font-family:'Cinzel',serif;font-size:12px;padding:10px 20px;border:1px solid var(--border);border-radius:3px;transition:transform 0.3s;z-index:9999;white-space:nowrap;max-width:90vw;text-align:center;}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(100px);background:var(--ink);color:var(--parchment);font-family:'Cinzel',serif;font-size:12px;padding:10px 20px;border:1px solid var(--border);border-radius:3px;transition:transform 0.3s;z-index:9999;max-width:90vw;text-align:center;white-space:normal;}
 .toast.show{transform:translateX(-50%) translateY(0);}
 </style>
 </head>
 <body>
-
-<div id="loading">
-  <div class="spinner"></div>
-  <p>The Scrolls Are Being Fetched...</p>
-</div>
+<div id="loading"><div class="spinner"></div><p>The Scrolls Are Being Fetched...</p></div>
 
 <nav>
   <button class="nav-btn active" id="nav-scoreboard" onclick="showView('scoreboard')">⚔ Standings</button>
-  <button class="nav-btn" id="nav-archery"    onclick="showView('archery')">🏹 Archery</button>
-  <button class="nav-btn" id="nav-nail"       onclick="showView('nail')">🔨 Nail Log</button>
-  <button class="nav-btn" id="nav-duel"       onclick="showView('duel')">⚔ Duels</button>
-  <button class="nav-btn" id="nav-personal"   onclick="showView('personal')">👤 My Honour</button>
-  <button class="nav-btn" id="nav-cleric"     onclick="showView('cleric')">📜 Cleric</button>
-  <button class="nav-btn" id="nav-qr"         onclick="showView('qr')">QR</button>
-  <button class="nav-btn" id="nav-phototest"  onclick="showView('phototest')">📸 Photo Test</button>
+  <button class="nav-btn" id="nav-archery"   onclick="showView('archery')">🏹 Archery</button>
+  <button class="nav-btn" id="nav-nail"      onclick="showView('nail')">🔨 Nail Log</button>
+  <button class="nav-btn" id="nav-duel"      onclick="showView('duel')">⚔ Duels</button>
+  <button class="nav-btn" id="nav-personal"  onclick="showView('personal')">👤 My Honour</button>
+  <button class="nav-btn" id="nav-art"       onclick="showView('art')">🎨 Art</button>
+  <button class="nav-btn" id="nav-riddles"   onclick="showView('riddles')">🧠 Riddles</button>
+  <button class="nav-btn" id="nav-maester"   onclick="showView('maester')">📜 Grand Maester</button>
 </nav>
 
-<!-- ══ SCOREBOARD ══ -->
+<!-- SCOREBOARD -->
 <div id="view-scoreboard" class="view active">
   <div class="page">
-    <div class="page-title">
-      <h1>⚔ William's Tournament ⚔</h1>
-      <p>21st Birthday — House Championship — Live Standings</p>
-    </div>
+    <div class="page-title"><h1>⚔ William's Tournament ⚔</h1><p>21st Birthday — House Championship — Live Standings</p></div>
     <div class="houses-grid" id="sb-houses"></div>
     <div class="parchment section">
-      <div class="section-title">Team Events</div>
+      <div class="section-title">⚔ Team Events</div>
       <div id="sb-team-rows"></div>
     </div>
     <div class="parchment section">
-      <div class="section-title">🏹 Archery — House Averages</div>
-      <div id="sb-archery-rows"></div>
-    </div>
-    <div class="parchment section">
-      <div class="section-title">🔨 Nail Into Log — Solo Leaderboard</div>
-      <div id="sb-nail-rows"></div>
-    </div>
-    <div class="parchment section">
-      <div class="section-title">🥚 Dragon Eggs</div>
-      <div id="sb-eggs"></div>
+      <div class="section-title">👤 Personal Honour by House</div>
+      <div id="sb-personal-sums"></div>
     </div>
   </div>
 </div>
 
-<!-- ══ ARCHERY ══ -->
+<!-- ARCHERY -->
 <div id="view-archery" class="view">
   <div class="page">
-    <div class="page-title">
-      <h1>🏹 Archery Range</h1>
-      <p>Loose thy arrow and earn honour for thy house</p>
-    </div>
+    <div class="page-title"><h1>🏹 Archery Range</h1><p>Loose thy arrow and earn honour for thy house</p></div>
     <div class="parchment section">
       <div id="arch-form">
         <div style="height:12px"></div>
         <div class="form-group">
-          <label class="form-label">Thy Name, Warrior</label>
-          <div class="input-wrap">
+          <label class="form-label" style="padding:0 14px">Thy Name, Warrior</label>
+          <div class="input-wrap" style="padding:0">
             <input class="form-input" type="text" id="arch-name" placeholder="Begin typing..." autocomplete="off"/>
             <div class="suggestions" id="arch-sug" style="display:none"></div>
           </div>
         </div>
         <div class="form-group">
-          <label class="form-label">Thy House</label>
+          <label class="form-label" style="padding:0 14px">Thy House</label>
           <div class="house-picker">
             <button class="hpick-btn arch-house-btn dragon" onclick="setArchHouse('dragon')"><span class="pe">🐉</span>Dragon</button>
             <button class="hpick-btn arch-house-btn wolf"   onclick="setArchHouse('wolf')"><span class="pe">🐺</span>Wolf</button>
@@ -1002,46 +888,50 @@ nav{background:#1a0f05;border-bottom:2px solid var(--border);padding:8px 8px;dis
           </div>
         </div>
         <div class="form-group">
-          <label class="form-label">Thy Shot</label>
+          <label class="form-label" style="padding:0 14px">Thy Shot</label>
           <div class="arch-shot-grid">
             <button class="arch-shot-btn" onclick="setArchScore(3,this)"><span class="ai">🎯</span>Bullseye<br><small style="font-size:10px">3 pts</small></button>
             <button class="arch-shot-btn" onclick="setArchScore(2,this)"><span class="ai">⭕</span>1st Ring<br><small style="font-size:10px">2 pts</small></button>
             <button class="arch-shot-btn" onclick="setArchScore(1,this)"><span class="ai">🏹</span>Hit!<br><small style="font-size:10px">1 pt</small></button>
           </div>
         </div>
-        <button class="btn-primary" onclick="submitArchery()">Record My Shot</button>
+        <button class="btn-primary" id="arch-submit-btn" onclick="submitArchery()">Record My Shot</button>
         <div style="height:14px"></div>
       </div>
       <div class="success-block" id="arch-success">
-        <div class="s-icon">🏹</div>
-        <h2>Shot Recorded!</h2>
+        <div class="s-icon">🏹</div><h2>Shot Recorded in the Scrolls!</h2>
         <p id="arch-success-txt"></p>
         <button class="btn-primary" style="margin-top:14px" onclick="resetArch()">Shoot Again</button>
         <div style="height:14px"></div>
       </div>
     </div>
+    <div class="parchment section">
+      <div class="section-title">🏹 House Rankings</div>
+      <div id="arch-board"></div>
+    </div>
+    <div class="parchment section">
+      <div class="section-title">Individual Shots</div>
+      <div id="arch-solo-board"></div>
+    </div>
   </div>
 </div>
 
-<!-- ══ NAIL ══ -->
+<!-- NAIL -->
 <div id="view-nail" class="view">
   <div class="page">
-    <div class="page-title">
-      <h1>🔨 Nail Into Log</h1>
-      <p>Fewest swings earns the most honour · 10 minus swings = thy points</p>
-    </div>
+    <div class="page-title"><h1>🔨 Nail Into Log</h1><p>10 minus thy swings = honour points · Strike true!</p></div>
     <div class="parchment section">
       <div id="nail-form">
         <div style="height:12px"></div>
         <div class="form-group">
-          <label class="form-label">Thy Name, Hammer-Wielder</label>
+          <label class="form-label" style="padding:0 14px">Thy Name, Hammer-Wielder</label>
           <div class="input-wrap">
             <input class="form-input" type="text" id="nail-name" placeholder="Begin typing..." autocomplete="off"/>
             <div class="suggestions" id="nail-sug" style="display:none"></div>
           </div>
         </div>
         <div class="form-group">
-          <label class="form-label">Thy House</label>
+          <label class="form-label" style="padding:0 14px">Thy House</label>
           <div class="house-picker">
             <button class="hpick-btn nail-house-btn dragon" onclick="setNailHouse('dragon')"><span class="pe">🐉</span>Dragon</button>
             <button class="hpick-btn nail-house-btn wolf"   onclick="setNailHouse('wolf')"><span class="pe">🐺</span>Wolf</button>
@@ -1050,60 +940,54 @@ nav{background:#1a0f05;border-bottom:2px solid var(--border);padding:8px 8px;dis
           </div>
         </div>
         <div class="form-group">
-          <label class="form-label">Number of Swings</label>
+          <label class="form-label" style="padding:0 14px">Number of Swings</label>
           <input class="form-input" type="number" id="nail-swings" placeholder="e.g. 7" min="1"/>
-          <div style="padding:5px 14px;font-size:12px;font-style:italic;color:var(--ink-light)">10 minus thy swings = honour points. Strike true!</div>
+          <div style="padding:4px 14px;font-size:11px;font-style:italic;color:var(--ink-light)">10 minus thy swings = honour points. Under 10 scores!</div>
         </div>
-        <button class="btn-primary" onclick="submitNail()">Record My Swings</button>
+        <button class="btn-primary" id="nail-submit-btn" onclick="submitNail()">Record My Swings</button>
         <div style="height:14px"></div>
       </div>
       <div class="success-block" id="nail-success">
-        <div class="s-icon">🔨</div>
-        <h2>Recorded in the Scrolls!</h2>
+        <div class="s-icon">🔨</div><h2>Recorded in the Scrolls!</h2>
         <p id="nail-success-txt"></p>
         <button class="btn-primary" style="margin-top:14px" onclick="resetNail()">Another Attempt</button>
         <div style="height:14px"></div>
       </div>
     </div>
+    <div class="parchment section">
+      <div class="section-title">🔨 Leaderboard — Fewest Swings</div>
+      <div id="nail-board"></div>
+    </div>
   </div>
 </div>
 
-<!-- ══ DUEL ══ -->
+<!-- DUELS -->
 <div id="view-duel" class="view">
   <div class="page">
-    <div class="page-title">
-      <h1>⚔ The Dueling Grounds</h1>
-      <p>Wager thy honour — winner takes all</p>
-    </div>
+    <div class="page-title"><h1>⚔ The Dueling Grounds</h1><p>Wager thy honour — winner takes all</p></div>
     <div class="parchment section">
       <div class="section-title">Issue a Challenge</div>
       <div style="padding:12px 0">
         <div class="form-group">
-          <label class="form-label">Challenger (Thee)</label>
-          <div class="input-wrap">
-            <input class="form-input" type="text" id="duel-p1" placeholder="Thy name..." autocomplete="off"/>
-            <div class="suggestions" id="duel-sug1" style="display:none"></div>
-          </div>
+          <label class="form-label" style="padding:0 14px">Challenger (Thee)</label>
+          <div class="input-wrap"><input class="form-input" type="text" id="duel-p1" placeholder="Thy name..." autocomplete="off"/><div class="suggestions" id="duel-sug1" style="display:none"></div></div>
         </div>
         <div class="duel-vs">⚔ VS ⚔</div>
         <div class="form-group" style="margin-top:8px">
-          <label class="form-label">Thy Opponent</label>
-          <div class="input-wrap">
-            <input class="form-input" type="text" id="duel-p2" placeholder="Their name..." autocomplete="off"/>
-            <div class="suggestions" id="duel-sug2" style="display:none"></div>
-          </div>
+          <label class="form-label" style="padding:0 14px">Thy Opponent</label>
+          <div class="input-wrap"><input class="form-input" type="text" id="duel-p2" placeholder="Their name..." autocomplete="off"/><div class="suggestions" id="duel-sug2" style="display:none"></div></div>
         </div>
         <div class="form-group">
-          <label class="form-label">Honour Wagered (pts each)</label>
+          <label class="form-label" style="padding:0 14px">Honour Wagered (pts each)</label>
           <input class="form-input" type="number" id="duel-wager" placeholder="e.g. 5" min="1"/>
           <div style="padding:4px 14px;font-size:11px;font-style:italic;color:var(--ink-light)">Thou canst not wager more than thy current honour</div>
         </div>
-        <button class="btn-primary" onclick="issueDuel()">Issue the Challenge ⚔</button>
+        <button class="btn-primary" id="duel-issue-btn" onclick="issueDuel()">Issue the Challenge ⚔</button>
         <div style="height:14px"></div>
       </div>
     </div>
     <div class="parchment section">
-      <div class="section-title">Active Duels — Confirm &amp; Claim Victory</div>
+      <div class="section-title">Active Duels — Confirm, Decline or Claim Victory</div>
       <div id="pending-duels"></div>
     </div>
     <div class="parchment section">
@@ -1113,21 +997,15 @@ nav{background:#1a0f05;border-bottom:2px solid var(--border);padding:8px 8px;dis
   </div>
 </div>
 
-<!-- ══ PERSONAL ══ -->
+<!-- PERSONAL -->
 <div id="view-personal" class="view">
   <div class="page">
-    <div class="page-title">
-      <h1>👤 My Honour</h1>
-      <p>Seek thy name in the scrolls</p>
-    </div>
+    <div class="page-title"><h1>👤 My Honour</h1><p>Seek thy name in the scrolls</p></div>
     <div class="parchment section">
       <div style="padding:12px 0 0">
         <div class="form-group">
-          <label class="form-label">Thy Name</label>
-          <div class="input-wrap">
-            <input class="form-input" type="text" id="personal-name" placeholder="Begin typing..." autocomplete="off"/>
-            <div class="suggestions" id="personal-sug" style="display:none"></div>
-          </div>
+          <label class="form-label" style="padding:0 14px">Thy Name</label>
+          <div class="input-wrap"><input class="form-input" type="text" id="personal-name" placeholder="Begin typing..." autocomplete="off"/><div class="suggestions" id="personal-sug" style="display:none"></div></div>
         </div>
         <button class="btn-primary" style="margin-bottom:14px" onclick="lookupPersonal()">Consult the Scrolls</button>
       </div>
@@ -1148,117 +1026,120 @@ nav{background:#1a0f05;border-bottom:2px solid var(--border);padding:8px 8px;dis
   </div>
 </div>
 
-<!-- ══ CLERIC ══ -->
-<div id="view-cleric" class="view">
+<!-- ART -->
+<div id="view-art" class="view">
   <div class="page">
-    <div class="page-title"><h1>📜 Tournament Cleric</h1><p>Only the Cleric may enter herein</p></div>
-    <div class="parchment section" id="cleric-login">
-      <div style="padding:24px 14px;text-align:center">
-        <div style="font-family:'Cinzel',serif;font-size:14px;font-weight:700;color:var(--ink);margin-bottom:14px">Speak the Sacred Password</div>
-        <input class="form-input" type="password" id="cleric-pw" placeholder="••••" style="text-align:center;margin-bottom:12px"/>
-        <button class="btn-primary" style="margin:0" onclick="clericLogin()">Enter the Sanctum</button>
+    <div class="page-title"><h1>🎨 Conquests of the Brush</h1><p>Submit thy anonymous masterpiece · Let the realm judge thy worth</p></div>
+    <div class="parchment section">
+      <div id="art-form">
+        <div style="height:12px"></div>
+        <div class="form-group">
+          <label class="form-label" style="padding:0 14px">Thy Name (kept secret from all but the Grand Maester)</label>
+          <div class="input-wrap">
+            <input class="form-input" type="text" id="art-name" placeholder="Thy name..." autocomplete="off"/>
+            <div class="suggestions" id="art-sug" style="display:none"></div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" style="padding:0 14px">Thy House</label>
+          <select class="form-input" id="art-house" style="font-size:15px">
+            <option value="">-- Select House --</option>
+            <option value="dragon">🐉 House Dragon</option>
+            <option value="wolf">🐺 House Wolf</option>
+            <option value="snake">🐍 House Snake</option>
+            <option value="lion">🦁 House Lion</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" style="padding:0 14px">Thy Masterpiece</label>
+          <div class="file-upload-area">
+            <label class="file-btn" for="art-file-cam">📸 Capture thy Masterpiece</label>
+            <input type="file" id="art-file-cam" accept="image/*" capture="environment" onchange="handleArtFile(this)"/>
+            <label class="file-btn" for="art-file-gal" style="margin-top:4px">🖼️ Upload thy Masterpiece</label>
+            <input type="file" id="art-file-gal" accept="image/*" onchange="handleArtFile(this)"/>
+            <input type="hidden" id="art-file"/>
+          </div>
+          <div id="art-status" style="padding:5px 14px;font-size:12px;font-style:italic;color:var(--ink-light)"></div>
+        </div>
+        <button class="btn-primary" id="art-submit-btn" onclick="submitArt()">Submit to the Gallery ⚔</button>
+        <div style="height:14px"></div>
+      </div>
+      <div class="success-block" id="art-success">
+        <div class="s-icon">🎨</div><h2>Masterpiece Submitted!</h2>
+        <p>Thy work hath been added to the gallery, anonymous to all but the Grand Maester. May the realm judge thee kindly!</p>
+        <button class="btn-primary" style="margin-top:14px" onclick="resetArt()">Submit Another</button>
         <div style="height:14px"></div>
       </div>
     </div>
-    <div id="cleric-panel" style="display:none">
-      <div class="parchment section">
-        <div class="section-title">⚔ Team Event Rankings</div>
-        <div id="cleric-team"></div>
+    <div class="parchment section">
+      <div class="section-title">🎨 The Gallery — Rate Each Work</div>
+      <div id="art-gallery" style="padding:10px"></div>
+    </div>
+  </div>
+</div>
+
+<!-- RIDDLES -->
+<div id="view-riddles" class="view">
+  <div class="page">
+    <div class="page-title"><h1>🧠 Trials of the Mind</h1><p>Prove thy wisdom — first to answer earns glory for thy house</p></div>
+    <div id="riddle-list"></div>
+  </div>
+</div>
+
+<!-- GRAND MAESTER -->
+<div id="view-maester" class="view">
+  <div class="page">
+    <div class="page-title"><h1>📜 Grand Maester</h1><p>Only the Maester may enter herein</p></div>
+    <div class="parchment section" id="maester-login">
+      <div style="padding:24px 14px;text-align:center">
+        <div style="font-family:'Cinzel',serif;font-size:14px;font-weight:700;color:var(--ink);margin-bottom:14px">Speak the Sacred Password</div>
+        <input class="form-input" type="password" id="maester-pw" placeholder="••••" style="text-align:center;margin-bottom:12px"/>
+        <button class="btn-primary" style="margin:0" onclick="maesterLogin()">Enter the Sanctum</button>
+        <div style="height:14px"></div>
       </div>
+    </div>
+    <div id="maester-panel" style="display:none">
+      <div class="parchment section"><div class="section-title">⚔ Team Event Rankings</div><div id="maester-team"></div></div>
       <div class="parchment section">
         <div class="section-title">🥚 Dragon Eggs</div>
         <div class="admin-row">
-          <div class="muted" style="margin-bottom:8px">Award 3 pts per egg · cap 30 pts per house</div>
+          <div class="muted" style="margin-bottom:8px">3 pts per egg · cap 30 pts per house</div>
           <div class="bonus-row">
-            <select id="egg-house">
-              <option value="dragon">🐉 Dragon</option>
-              <option value="wolf">🐺 Wolf</option>
-              <option value="snake">🐍 Snake</option>
-              <option value="lion">🦁 Lion</option>
-            </select>
+            <select id="egg-house"><option value="dragon">🐉 Dragon</option><option value="wolf">🐺 Wolf</option><option value="snake">🐍 Snake</option><option value="lion">🦁 Lion</option></select>
             <input type="number" id="egg-count" placeholder="eggs" min="1" value="1"/>
             <button class="btn-sm" onclick="addEggs()">+ Eggs</button>
           </div>
-          <div id="cleric-egg-totals" style="margin-top:8px;font-size:12px;color:var(--ink-light)"></div>
+          <div id="maester-egg-totals" style="margin-top:8px;font-size:12px;color:var(--ink-light)"></div>
         </div>
       </div>
       <div class="parchment section">
         <div class="section-title">✨ Manual Honour Points</div>
         <div class="admin-row">
           <div class="bonus-row">
-            <select id="bonus-house">
-              <option value="dragon">🐉 Dragon</option>
-              <option value="wolf">🐺 Wolf</option>
-              <option value="snake">🐍 Snake</option>
-              <option value="lion">🦁 Lion</option>
-            </select>
+            <select id="bonus-house"><option value="dragon">🐉 Dragon</option><option value="wolf">🐺 Wolf</option><option value="snake">🐍 Snake</option><option value="lion">🦁 Lion</option></select>
             <input type="number" id="bonus-pts" placeholder="pts" value="1"/>
             <button class="btn-sm" onclick="addBonus()">+ Add</button>
           </div>
         </div>
       </div>
+      <div class="parchment section"><div class="section-title">🧠 Riddle Control</div><div id="maester-riddles"></div></div>
+      <div class="parchment section"><div class="section-title">🎨 Art Submissions (Private)</div><div id="maester-art" style="padding:10px"></div></div>
+      <div class="parchment section"><div class="section-title">👑 Individual Honour Board</div><div id="maester-indiv"></div></div>
+      <div class="parchment section"><div class="section-title">🏹 Archery Entries</div><div id="maester-arch"></div></div>
+      <div class="parchment section"><div class="section-title">🔨 Nail Log Entries</div><div id="maester-nail"></div></div>
+      <div class="parchment section"><div class="section-title">⚔ All Duels</div><div id="maester-duels"></div></div>
       <div class="parchment section">
-        <div class="section-title">👑 Individual Honour Board</div>
-        <div id="cleric-indiv"></div>
-      </div>
-      <div class="parchment section">
-        <div class="section-title">🏹 Archery Entries</div>
-        <div id="cleric-arch-entries"></div>
-      </div>
-      <div class="parchment section">
-        <div class="section-title">🔨 Nail Log Entries</div>
-        <div id="cleric-nail-entries"></div>
+        <div class="section-title">📋 Station QR Codes</div>
+        <div style="padding:10px"><div class="qr-grid" id="maester-qr-grid"></div></div>
       </div>
       <div class="parchment section">
         <div class="section-title">⚠ Danger Zone</div>
-        <div class="admin-row">
-          <button class="btn-danger" onclick="confirmReset()">Wipe All Scrolls (Reset Tournament)</button>
-        </div>
+        <div class="admin-row"><button class="btn-danger" onclick="confirmReset()">Wipe All Scrolls — Reset Tournament</button></div>
       </div>
     </div>
-  </div>
-</div>
-
-<!-- ══ PHOTO TEST ══ -->
-<div id="view-phototest" class="view">
-  <div class="page">
-    <div class="page-title">
-      <h1>📸 Photo Test</h1>
-      <p>Testing base64 image quality via Firebase</p>
-    </div>
-    <div class="parchment section">
-      <div style="padding:14px">
-        <label class="form-label">Take or Choose a Photo</label>
-        <input type="file" accept="image/*" capture="environment" id="photo-test-input" style="color:var(--ink);margin:10px 0;display:block"/>
-        <button class="btn-primary" style="margin:0" id="photo-test-upload-btn">Upload Photo</button>
-        <div id="photo-test-status" style="margin-top:8px;font-size:12px;font-style:italic;color:var(--ink-light)">Pick a photo to begin</div>
-      </div>
-    </div>
-    <div class="parchment section">
-      <div class="section-title">Uploaded Photos</div>
-      <div id="photo-test-gallery" style="padding:10px"></div>
-    </div>
-  </div>
-</div>
-
-<!-- ══ QR ══ -->
-<div id="view-qr" class="view">
-  <div class="page">
-    <div class="page-title">
-      <h1>📋 Station Scrolls</h1>
-      <p>Screenshot each card · print at thy stations</p>
-    </div>
-    <div class="qr-grid" id="qr-grid"></div>
   </div>
 </div>
 
 <div class="toast" id="toast"></div>
-
-<script>
-// Expose name input setup for inline onchange use after module loads
-window._setupDuelInputs = function() {
-  // done in module
-};
-</script>
 </body>
 </html>

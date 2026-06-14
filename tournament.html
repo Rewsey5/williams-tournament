@@ -21,6 +21,22 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
+// ══ AUDIO UNLOCK ══
+window.unlockAudio = function(){
+  const splash = document.getElementById('audio-splash');
+  if(splash) splash.style.display='none';
+  // Unlock audio context by playing silence
+  try{
+    const ctx = new(window.AudioContext||window.webkitAudioContext)();
+    const buf = ctx.createBuffer(1,1,22050);
+    const src = ctx.createBufferSource();
+    src.buffer=buf; src.connect(ctx.destination); src.start(0);
+    ctx.resume();
+  }catch(e){}
+  // Prime all audio files
+  Object.values(SFX).forEach(s=>{ try{s.volume=0;s.play().then(()=>{s.pause();s.currentTime=0;s.volume=0.8;}).catch(()=>{});} catch(e){} });
+};
+
 // ══ AUDIO ══
 const SFX = {
   sword:  new Audio('sword.wav'),
@@ -525,9 +541,9 @@ function renderRiddles(){
   const el=document.getElementById('riddle-list');if(!el)return;
   el.innerHTML=RIDDLES.map(r=>{
     const rd=S.riddles[r.id]||{};
-    if(!rd.released)return`<div class="parchment riddle-card locked"><div class="riddle-lock">🔒</div><div class="riddle-num">Sealed by the Grand Maester</div></div>`;
-    if(rd.solved)return`<div class="parchment riddle-card solved"><div class="riddle-num">Solved! ✅</div><div class="riddle-q">${r.q}</div><div style="margin-top:8px;padding:8px;background:rgba(30,132,73,0.1);border-radius:3px;font-family:'Cinzel',serif;font-size:11px;color:#1e8449">Winner: ${esc(rd.winnerName)} · ${rd.winnerHouse?capFirst(rd.winnerHouse):''} · ${RIDDLE_PTS} pts awarded</div></div>`;
-    return`<div class="parchment riddle-card">
+    if(!rd.released)return`<div class="parchment riddle-card locked"><div class="parchment-bg"></div><div class="riddle-card-bg"></div><div class="riddle-lock">🔒</div><div class="riddle-num">Sealed by the Grand Maester</div></div>`;
+    if(rd.solved)return`<div class="parchment riddle-card solved"><div class="parchment-bg"></div><div class="riddle-card-bg"></div><div class="riddle-num">Solved! ✅</div><div class="riddle-q">${r.q}</div><div style="margin-top:8px;padding:8px;background:rgba(30,132,73,0.1);border-radius:3px;font-family:'Cinzel',serif;font-size:11px;color:#1e8449">Winner: ${esc(rd.winnerName)} · ${rd.winnerHouse?capFirst(rd.winnerHouse):''} · ${RIDDLE_PTS} pts awarded</div></div>`;
+    return`<div class="parchment riddle-card"><div class="parchment-bg"></div><div class="riddle-card-bg"></div>
       <div class="riddle-num">Riddle the ${['First','Second','Third','Fourth','Fifth','Sixth','Seventh','Eighth','Ninth','Tenth'][RIDDLES.indexOf(r)]||''}</div>
       <div class="riddle-q">${r.q}</div>
       ${rd.hintRevealed?`<div class="riddle-hint">💡 ${r.hint}</div>`:'<div class="riddle-hint-locked">Hint sealed — await the Maester\'s mercy</div>'}
@@ -698,21 +714,26 @@ nav{position:sticky;top:0;z-index:100;background:linear-gradient(180deg,#0d0703,
 .content{position:relative;z-index:1;max-width:560px;margin:0 auto;padding:14px 12px 40px;}
 
 /* ── WELCOME ── */
-.welcome{background:linear-gradient(135deg,#f5e2b0,#ead090 50%,#f0dfa8);border:2px solid var(--gold);padding:12px 14px;display:flex;align-items:center;gap:12px;margin-bottom:14px;box-shadow:0 4px 20px rgba(0,0,0,0.6),inset 0 1px 0 rgba(230,184,48,0.3);position:relative;overflow:hidden;filter:url(#torn-sm);}
+.welcome{background:linear-gradient(135deg,#f5e2b0,#ead090 50%,#f0dfa8);border:2px solid var(--gold);padding:12px 14px;display:flex;align-items:center;gap:12px;margin-bottom:14px;box-shadow:0 4px 20px rgba(0,0,0,0.6),inset 0 1px 0 rgba(230,184,48,0.3);position:relative;overflow:visible;}
+.welcome::before{content:'';position:absolute;inset:-3px;background:inherit;border:inherit;filter:url(#torn-sm);z-index:0;pointer-events:none;}
+.welcome > *{position:relative;z-index:1;}
 .welcome-crest{width:46px;height:46px;object-fit:contain;flex-shrink:0;}
 .welcome-name{font-family:'Cinzel',serif;font-size:14px;font-weight:700;color:var(--ink);letter-spacing:0.05em;}
 .welcome-sub{font-size:13px;color:var(--ink-light);font-style:italic;margin-top:2px;}
 
 /* ── PARCHMENT ── */
-.parchment{position:relative;margin-bottom:14px;background:linear-gradient(160deg,#f5e6bf,#ead5a0 35%,#f0dfa8 60%,#e8d090 85%,#f2e2b0);border:2px solid var(--border);box-shadow:0 6px 28px rgba(0,0,0,0.65),inset 0 0 50px rgba(139,100,20,0.1);filter:url(#torn);overflow:visible;}
+.parchment{position:relative;margin-bottom:14px;border-radius:2px;overflow:visible;}
 
-/* Aged corner vignette — pseudo element only, no text disruption */
-.parchment::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 0% 0%,rgba(80,40,5,0.22) 0%,transparent 38%),radial-gradient(ellipse at 100% 0%,rgba(70,35,5,0.18) 0%,transparent 33%),radial-gradient(ellipse at 0% 100%,rgba(90,45,5,0.2) 0%,transparent 35%),radial-gradient(ellipse at 100% 100%,rgba(80,40,5,0.18) 0%,transparent 32%);pointer-events:none;z-index:0;}
+/* Torn background layer — filter applied only here, text sits above unaffected */
+.parchment-bg{position:absolute;inset:-4px;background:linear-gradient(160deg,#f5e6bf,#ead5a0 35%,#f0dfa8 60%,#e8d090 85%,#f2e2b0);border:2px solid var(--border);box-shadow:0 6px 28px rgba(0,0,0,0.65),inset 0 0 50px rgba(139,100,20,0.1);filter:url(#torn);z-index:0;pointer-events:none;}
 
-/* Horizontal grain */
-.parchment::after{content:'';position:absolute;inset:0;background-image:repeating-linear-gradient(0deg,transparent,transparent 20px,rgba(139,100,20,0.035) 20px,rgba(139,100,20,0.035) 21px);pointer-events:none;z-index:0;}
+/* Aged corner vignette on bg layer */
+.parchment-bg::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 0% 0%,rgba(80,40,5,0.22) 0%,transparent 38%),radial-gradient(ellipse at 100% 0%,rgba(70,35,5,0.18) 0%,transparent 33%),radial-gradient(ellipse at 0% 100%,rgba(90,45,5,0.2) 0%,transparent 35%),radial-gradient(ellipse at 100% 100%,rgba(80,40,5,0.18) 0%,transparent 32%);pointer-events:none;}
 
-/* All parchment children above the texture */
+/* Grain on bg layer */
+.parchment-bg::after{content:'';position:absolute;inset:0;background-image:repeating-linear-gradient(0deg,transparent,transparent 20px,rgba(139,100,20,0.035) 20px,rgba(139,100,20,0.035) 21px);pointer-events:none;}
+
+/* Content sits above torn bg — crisp text */
 .parchment > *{position:relative;z-index:1;}
 
 /* ── SECTION TITLE ── */
@@ -727,7 +748,8 @@ nav{position:sticky;top:0;z-index:100;background:linear-gradient(180deg,#0d0703,
 .house-card.wolf{border-color:var(--wolf);background:linear-gradient(160deg,#010c1a,#000810);}
 .house-card.snake{border-color:var(--snake);background:linear-gradient(160deg,#011408,#000d04);}
 .house-card.lion{border-color:var(--lion);background:linear-gradient(160deg,#1a0e00,#0d0800);}
-.house-crest-img{width:58px;height:58px;object-fit:contain;display:block;margin:0 auto 6px;}
+.house-crest-img{width:58px;height:58px;object-fit:contain;display:block;margin:0 auto 6px;mix-blend-mode:multiply;}
+.welcome-crest{mix-blend-mode:multiply;}
 .h-name{font-family:'Cinzel',serif;font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:4px;}
 .house-card.dragon .h-name,.house-card.dragon .h-pts{color:#d4423a;}
 .house-card.wolf   .h-name,.house-card.wolf   .h-pts{color:#3a7abf;}
@@ -803,7 +825,9 @@ nav{position:sticky;top:0;z-index:100;background:linear-gradient(180deg,#0d0703,
 .personal-house-badge{display:inline-block;padding:4px 14px;border-radius:2px;font-family:'Cinzel',serif;font-size:12px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;margin-top:6px;}
 
 /* ── RIDDLES ── */
-.riddle-card{padding:14px;margin-bottom:10px;filter:url(#torn);}
+.riddle-card{padding:14px;margin-bottom:10px;position:relative;}
+.riddle-card-bg{position:absolute;inset:-3px;background:linear-gradient(160deg,#f5e6bf,#ead5a0 35%,#f0dfa8 60%,#e8d090);border:2px solid var(--border);filter:url(#torn-sm);z-index:0;pointer-events:none;}
+.riddle-card > *{position:relative;z-index:1;}
 .riddle-card.locked{text-align:center;padding:20px;opacity:0.7;}
 .riddle-card.solved{border-color:#1e8449!important;}
 .riddle-lock{font-size:28px;margin-bottom:4px;}
@@ -847,7 +871,9 @@ input[type=file]{display:none;}
 
 /* ── MODAL ── */
 .modal-overlay{position:fixed;inset:0;background:rgba(5,2,0,0.88);z-index:500;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(2px);}
-.modal-box{background:linear-gradient(160deg,#f5e6bf,#ead5a0 40%,#f0dfa8 70%,#e8d090);border:3px solid var(--gold);border-radius:3px;max-width:340px;width:100%;box-shadow:0 10px 50px rgba(0,0,0,0.9),inset 0 0 40px rgba(139,100,20,0.1);filter:url(#torn);}
+.modal-box{position:relative;max-width:340px;width:100%;overflow:visible;}
+.modal-box-bg{position:absolute;inset:-4px;background:linear-gradient(160deg,#f5e6bf,#ead5a0 40%,#f0dfa8 70%,#e8d090);border:3px solid var(--gold);box-shadow:0 10px 50px rgba(0,0,0,0.9);filter:url(#torn);z-index:0;pointer-events:none;}
+.modal-box > *{position:relative;z-index:1;}
 .modal-title{font-family:'Cinzel',serif;font-size:15px;font-weight:900;color:var(--ink);text-align:center;letter-spacing:0.08em;padding:16px 20px 6px;}
 .modal-body{font-size:14px;color:var(--ink-light);text-align:center;font-style:italic;padding:0 20px 16px;line-height:1.7;}
 .modal-divider{height:1px;background:linear-gradient(90deg,transparent,var(--border),transparent);margin:0 14px;opacity:0.4;}
@@ -920,8 +946,8 @@ input[type=file]{display:none;}
     </div>
     <div class="page-title"><h1>⚔ William's Tournament ⚔</h1><p>21st Birthday — House Championship</p></div>
     <div class="houses-grid" id="sb-houses"></div>
-    <div class="parchment"><div class="section-title">⚔ Team Events</div><div id="sb-team-rows"></div></div>
-    <div class="parchment"><div class="section-title">👤 Personal Honour by House</div><div id="sb-personal-sums"></div></div>
+    <div class="parchment"><div class="parchment-bg"></div><div class="section-title">⚔ Team Events</div><div id="sb-team-rows"></div></div>
+    <div class="parchment"><div class="parchment-bg"></div><div class="section-title">👤 Personal Honour by House</div><div id="sb-personal-sums"></div></div>
   </div>
 </div>
 
@@ -929,7 +955,7 @@ input[type=file]{display:none;}
 <div id="view-archery" class="view">
   <div class="content">
     <div class="page-title"><h1>🏹 Archery Range</h1><p>Loose thy arrow · earn honour for thy house</p></div>
-    <div class="parchment">
+    <div class="parchment"><div class="parchment-bg"></div>
       <div id="arch-form">
         <div style="height:12px"></div>
         <div class="form-group"><label class="form-label" style="padding:0 14px">Thy Name</label><div class="input-wrap"><input class="form-input" type="text" id="arch-name" placeholder="Begin typing..." autocomplete="off"/><div class="suggestions" id="arch-sug" style="display:none"></div></div></div>
@@ -940,8 +966,8 @@ input[type=file]{display:none;}
       </div>
       <div class="success-block" id="arch-success"><div class="s-icon">🏹</div><h2>Shot Recorded!</h2><p id="arch-success-txt"></p><button class="btn-primary" style="margin-top:14px" onclick="resetArch()">Shoot Again</button><div style="height:14px"></div></div>
     </div>
-    <div class="parchment"><div class="section-title">🏹 House Rankings</div><div id="arch-board"></div></div>
-    <div class="parchment"><div class="section-title">Individual Shots</div><div id="arch-solo-board"></div></div>
+    <div class="parchment"><div class="parchment-bg"></div><div class="section-title">🏹 House Rankings</div><div id="arch-board"></div></div>
+    <div class="parchment"><div class="parchment-bg"></div><div class="section-title">Individual Shots</div><div id="arch-solo-board"></div></div>
   </div>
 </div>
 
@@ -949,7 +975,7 @@ input[type=file]{display:none;}
 <div id="view-nail" class="view">
   <div class="content">
     <div class="page-title"><h1>🔨 Nail Into Log</h1><p>10 minus thy swings = honour points · Strike true!</p></div>
-    <div class="parchment">
+    <div class="parchment"><div class="parchment-bg"></div>
       <div id="nail-form">
         <div style="height:12px"></div>
         <div class="form-group"><label class="form-label" style="padding:0 14px">Thy Name</label><div class="input-wrap"><input class="form-input" type="text" id="nail-name" placeholder="Begin typing..." autocomplete="off"/><div class="suggestions" id="nail-sug" style="display:none"></div></div></div>
@@ -960,7 +986,7 @@ input[type=file]{display:none;}
       </div>
       <div class="success-block" id="nail-success"><div class="s-icon">🔨</div><h2>Recorded in the Scrolls!</h2><p id="nail-success-txt"></p><button class="btn-primary" style="margin-top:14px" onclick="resetNail()">Another Attempt</button><div style="height:14px"></div></div>
     </div>
-    <div class="parchment"><div class="section-title">🔨 Leaderboard — Fewest Swings</div><div id="nail-board"></div></div>
+    <div class="parchment"><div class="parchment-bg"></div><div class="section-title">🔨 Leaderboard — Fewest Swings</div><div id="nail-board"></div></div>
   </div>
 </div>
 
@@ -968,7 +994,7 @@ input[type=file]{display:none;}
 <div id="view-duel" class="view">
   <div class="content">
     <div class="page-title"><h1>⚔ The Dueling Grounds</h1><p>Wager thy honour — winner takes all</p></div>
-    <div class="parchment">
+    <div class="parchment"><div class="parchment-bg"></div>
       <div class="section-title">Issue a Challenge</div>
       <div style="padding:12px 0">
         <div class="form-group"><label class="form-label" style="padding:0 14px">Challenger (Thee)</label><div class="input-wrap"><input class="form-input" type="text" id="duel-p1" placeholder="Thy name..." autocomplete="off"/><div class="suggestions" id="duel-sug1" style="display:none"></div></div></div>
@@ -979,8 +1005,8 @@ input[type=file]{display:none;}
         <div style="height:14px"></div>
       </div>
     </div>
-    <div class="parchment"><div class="section-title">Active Duels</div><div id="pending-duels"></div></div>
-    <div class="parchment"><div class="section-title">Battle History</div><div id="duel-history"></div></div>
+    <div class="parchment"><div class="parchment-bg"></div><div class="section-title">Active Duels</div><div id="pending-duels"></div></div>
+    <div class="parchment"><div class="parchment-bg"></div><div class="section-title">Battle History</div><div id="duel-history"></div></div>
   </div>
 </div>
 
@@ -988,7 +1014,7 @@ input[type=file]{display:none;}
 <div id="view-personal" class="view">
   <div class="content">
     <div class="page-title"><h1>👤 My Honour</h1><p>Seek thy name in the scrolls</p></div>
-    <div class="parchment">
+    <div class="parchment"><div class="parchment-bg"></div>
       <div style="padding:12px 0 0">
         <div class="form-group"><label class="form-label" style="padding:0 14px">Thy Name</label><div class="input-wrap"><input class="form-input" type="text" id="personal-name" placeholder="Begin typing..." autocomplete="off"/><div class="suggestions" id="personal-sug" style="display:none"></div></div></div>
         <button class="btn-primary" style="margin-bottom:14px" onclick="lookupPersonal()">Consult the Scrolls</button>
@@ -1014,7 +1040,7 @@ input[type=file]{display:none;}
 <div id="view-art" class="view">
   <div class="content">
     <div class="page-title"><h1>🎨 Conquests of the Brush</h1><p>Submit thy anonymous masterpiece · Let the realm judge</p></div>
-    <div class="parchment">
+    <div class="parchment"><div class="parchment-bg"></div>
       <div id="art-form">
         <div style="height:12px"></div>
         <div class="form-group"><label class="form-label" style="padding:0 14px">Thy Name (seen only by the Grand Maester)</label><div class="input-wrap"><input class="form-input" type="text" id="art-name" placeholder="Thy name..." autocomplete="off"/><div class="suggestions" id="art-sug" style="display:none"></div></div></div>
@@ -1034,7 +1060,7 @@ input[type=file]{display:none;}
       </div>
       <div class="success-block" id="art-success"><div class="s-icon">🎨</div><h2>Masterpiece Submitted!</h2><p>Thy work hath been added to the gallery, anonymous to all but the Grand Maester. May the realm judge thee kindly!</p><button class="btn-primary" style="margin-top:14px" onclick="resetArt()">Submit Another</button><div style="height:14px"></div></div>
     </div>
-    <div class="parchment"><div class="section-title">🎨 The Gallery — Rate Each Work 1–5 ⭐</div><div id="art-gallery" style="padding:10px"></div></div>
+    <div class="parchment"><div class="parchment-bg"></div><div class="section-title">🎨 The Gallery — Rate Each Work 1–5 ⭐</div><div id="art-gallery" style="padding:10px"></div></div>
   </div>
 </div>
 
@@ -1071,24 +1097,24 @@ input[type=file]{display:none;}
       </div>
     </div>
     <div id="maester-panel" style="display:none">
-      <div class="parchment"><div class="section-title">⚔ Team Event Rankings</div><div id="maester-team"></div></div>
-      <div class="parchment"><div class="section-title">🥚 Dragon Eggs</div><div class="admin-row"><div class="muted" style="margin-bottom:8px">3 pts per egg · cap 30 per house</div><div class="bonus-row"><select id="egg-house"><option value="dragon">🐉 Dragon</option><option value="wolf">🐺 Wolf</option><option value="snake">🐍 Snake</option><option value="lion">🦁 Lion</option></select><input type="number" id="egg-count" placeholder="eggs" min="1" value="1"/><button class="btn-sm" onclick="addEggs()">+ Eggs</button></div><div id="maester-egg-totals" style="margin-top:8px;font-size:12px;color:var(--ink-light)"></div></div></div>
-      <div class="parchment"><div class="section-title">✨ Manual Honour Points</div><div class="admin-row"><div class="bonus-row"><select id="bonus-house"><option value="dragon">🐉 Dragon</option><option value="wolf">🐺 Wolf</option><option value="snake">🐍 Snake</option><option value="lion">🦁 Lion</option></select><input type="number" id="bonus-pts" placeholder="pts" value="1"/><button class="btn-sm" onclick="addBonus()">+ Add</button></div></div></div>
-      <div class="parchment"><div class="section-title">🧠 Riddle Control</div><div id="maester-riddles"></div></div>
-      <div class="parchment"><div class="section-title">🎨 Art Submissions (Private)</div><div id="maester-art" style="padding:10px"></div></div>
-      <div class="parchment"><div class="section-title">👑 Individual Honour Board</div><div id="maester-indiv"></div></div>
-      <div class="parchment"><div class="section-title">🏹 Archery Entries</div><div id="maester-arch"></div></div>
-      <div class="parchment"><div class="section-title">🔨 Nail Log Entries</div><div id="maester-nail"></div></div>
-      <div class="parchment"><div class="section-title">⚔ All Duels</div><div id="maester-duels"></div></div>
-      <div class="parchment"><div class="section-title">📋 Station QR Codes</div><div style="padding:10px"><div class="qr-grid" id="maester-qr-grid"></div></div></div>
-      <div class="parchment"><div class="section-title">⚠ Danger Zone</div><div class="admin-row"><button class="btn-danger" onclick="confirmReset()">Wipe All Scrolls — Reset Tournament</button></div></div>
+      <div class="parchment"><div class="parchment-bg"></div><div class="section-title">⚔ Team Event Rankings</div><div id="maester-team"></div></div>
+      <div class="parchment"><div class="parchment-bg"></div><div class="section-title">🥚 Dragon Eggs</div><div class="admin-row"><div class="muted" style="margin-bottom:8px">3 pts per egg · cap 30 per house</div><div class="bonus-row"><select id="egg-house"><option value="dragon">🐉 Dragon</option><option value="wolf">🐺 Wolf</option><option value="snake">🐍 Snake</option><option value="lion">🦁 Lion</option></select><input type="number" id="egg-count" placeholder="eggs" min="1" value="1"/><button class="btn-sm" onclick="addEggs()">+ Eggs</button></div><div id="maester-egg-totals" style="margin-top:8px;font-size:12px;color:var(--ink-light)"></div></div></div>
+      <div class="parchment"><div class="parchment-bg"></div><div class="section-title">✨ Manual Honour Points</div><div class="admin-row"><div class="bonus-row"><select id="bonus-house"><option value="dragon">🐉 Dragon</option><option value="wolf">🐺 Wolf</option><option value="snake">🐍 Snake</option><option value="lion">🦁 Lion</option></select><input type="number" id="bonus-pts" placeholder="pts" value="1"/><button class="btn-sm" onclick="addBonus()">+ Add</button></div></div></div>
+      <div class="parchment"><div class="parchment-bg"></div><div class="section-title">🧠 Riddle Control</div><div id="maester-riddles"></div></div>
+      <div class="parchment"><div class="parchment-bg"></div><div class="section-title">🎨 Art Submissions (Private)</div><div id="maester-art" style="padding:10px"></div></div>
+      <div class="parchment"><div class="parchment-bg"></div><div class="section-title">👑 Individual Honour Board</div><div id="maester-indiv"></div></div>
+      <div class="parchment"><div class="parchment-bg"></div><div class="section-title">🏹 Archery Entries</div><div id="maester-arch"></div></div>
+      <div class="parchment"><div class="parchment-bg"></div><div class="section-title">🔨 Nail Log Entries</div><div id="maester-nail"></div></div>
+      <div class="parchment"><div class="parchment-bg"></div><div class="section-title">⚔ All Duels</div><div id="maester-duels"></div></div>
+      <div class="parchment"><div class="parchment-bg"></div><div class="section-title">📋 Station QR Codes</div><div style="padding:10px"><div class="qr-grid" id="maester-qr-grid"></div></div></div>
+      <div class="parchment"><div class="parchment-bg"></div><div class="section-title">⚠ Danger Zone</div><div class="admin-row"><button class="btn-danger" onclick="confirmReset()">Wipe All Scrolls — Reset Tournament</button></div></div>
     </div>
   </div>
 </div>
 
 <!-- MODAL -->
 <div class="modal-overlay" id="modal-overlay" style="display:none" onclick="hideModal()">
-  <div class="modal-box" onclick="event.stopPropagation()">
+  <div class="modal-box" onclick="event.stopPropagation()"><div class="modal-box-bg"></div>
     <div style="text-align:center;padding:16px 20px 8px">
       <svg width="44" height="44" viewBox="0 0 52 52" xmlns="http://www.w3.org/2000/svg"><defs><radialGradient id="mg" cx="35%" cy="30%"><stop offset="0%" stop-color="#c0392b" stop-opacity="0.7"/><stop offset="100%" stop-color="#4a0000"/></radialGradient></defs><circle cx="26" cy="26" r="24" fill="url(#mg)"/><circle cx="26" cy="26" r="19" fill="none" stroke="#e6a817" stroke-width="1.2" opacity="0.5"/><text x="26" y="31" text-anchor="middle" font-size="18" fill="#e6a817">⚔</text></svg>
     </div>
@@ -1100,6 +1126,15 @@ input[type=file]{display:none;}
       <button class="modal-btn modal-btn-confirm" id="modal-confirm">Aye, Proceed</button>
     </div>
   </div>
+</div>
+
+<!-- AUDIO UNLOCK SPLASH -->
+<div id="audio-splash" style="position:fixed;inset:0;background:rgba(8,3,1,0.97);z-index:99999;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;cursor:pointer" onclick="unlockAudio()">
+  <div style="font-size:48px;animation:tflame 2s ease-in-out infinite alternate">🔥</div>
+  <div style="font-family:'Cinzel',serif;font-size:22px;font-weight:900;color:#f2e8d0;letter-spacing:0.1em;text-align:center;line-height:1.3">⚔ William's<br>Tournament ⚔</div>
+  <div style="font-family:'Cinzel',serif;font-size:11px;color:#c8941a;letter-spacing:0.12em;text-transform:uppercase;margin-top:4px">Tap to Enter the Realm</div>
+  <div style="width:60px;height:1px;background:linear-gradient(90deg,transparent,#c8941a,transparent)"></div>
+  <div style="font-family:'Crimson Text',serif;font-size:13px;color:rgba(230,210,150,0.5);font-style:italic">21st Birthday · House Championship</div>
 </div>
 
 <div id="loading"><div class="spinner"></div><p>The Scrolls Are Being Fetched...</p></div>

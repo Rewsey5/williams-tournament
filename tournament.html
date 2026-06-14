@@ -253,6 +253,7 @@ function showView(v) {
   if(v==='personal') initPersonalPage();
   if(v==='cleric'&&adminUnlocked) renderCleric();
   if(v==='qr') renderQR();
+  if(v==='phototest') initPhotoTest();
   if(v==='cleric'&&!adminUnlocked) showClericLogin();
 }
 
@@ -655,6 +656,21 @@ async function confirmReset() {
   renderCleric();
 }
 
+// ══ PHOTO TEST INIT ══
+function initPhotoTest() {
+  const btn = document.getElementById('photo-test-upload-btn');
+  const inp = document.getElementById('photo-test-input');
+  if(!btn||!inp) return;
+  // Prevent double binding
+  btn.replaceWith(btn.cloneNode(true));
+  const newBtn = document.getElementById('photo-test-upload-btn');
+  newBtn.addEventListener('click', () => {
+    const file = inp.files[0];
+    if(!file) { toast('Pick a photo first'); return; }
+    uploadTestPhoto(file);
+  });
+}
+
 // ══ QR CODES ══
 function renderQR() {
   const base = window.location.href.split('?')[0].split('#')[0];
@@ -683,6 +699,57 @@ function renderQR() {
     },80);
   });
 }
+
+// ══ PHOTO TEST ══
+async function uploadTestPhoto(file) {
+  const status = document.getElementById('photo-test-status');
+  if(!file) return;
+  status.textContent = 'Compressing...';
+  const b64 = await compressImage(file, 800, 0.7);
+  const kb = Math.round(b64.length * 0.75 / 1024);
+  status.textContent = `Uploading... (${kb}KB)`;
+  try {
+    await fsAdd('photo_test', {image: b64, votes: 0});
+    status.textContent = `✅ Upload success! (${kb}KB) — check gallery below`;
+  } catch(e) {
+    status.textContent = '❌ Error: ' + e.message;
+  }
+}
+
+function compressImage(file, maxWidth=800, quality=0.7) {
+  return new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let w = img.width, h = img.height;
+        if(w > maxWidth) { h = Math.round(h * maxWidth / w); w = maxWidth; }
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+onSnapshot(collection(db,'photo_test'), snap => {
+  const gallery = document.getElementById('photo-test-gallery');
+  if(!gallery) return;
+  gallery.innerHTML = '';
+  snap.docs.forEach(d => {
+    const data = d.data();
+    const div = document.createElement('div');
+    div.style.cssText = 'margin-bottom:10px;border:2px solid var(--border);border-radius:4px;overflow:hidden;background:var(--parchment)';
+    div.innerHTML = `<img src="${data.image}" style="width:100%;display:block"/><div style="padding:8px;display:flex;justify-content:space-between;align-items:center"><span style="font-size:12px;font-style:italic;color:var(--ink-light)">Votes: ${data.votes||0}</span><button class="btn-sm" data-id="${d.id}">👍 Vote</button></div>`;
+    div.querySelector('button').addEventListener('click', async () => {
+      await setDoc(doc(db,'photo_test',d.id),{votes:(data.votes||0)+1},{merge:true});
+    });
+    gallery.appendChild(div);
+  });
+});
 
 // ══ URL PARAMS ══
 function handleParams() {
@@ -878,6 +945,7 @@ nav{background:#1a0f05;border-bottom:2px solid var(--border);padding:8px 8px;dis
   <button class="nav-btn" id="nav-personal"   onclick="showView('personal')">👤 My Honour</button>
   <button class="nav-btn" id="nav-cleric"     onclick="showView('cleric')">📜 Cleric</button>
   <button class="nav-btn" id="nav-qr"         onclick="showView('qr')">QR</button>
+  <button class="nav-btn" id="nav-phototest"  onclick="showView('phototest')">📸 Photo Test</button>
 </nav>
 
 <!-- ══ SCOREBOARD ══ -->
@@ -1147,6 +1215,28 @@ nav{background:#1a0f05;border-bottom:2px solid var(--border);padding:8px 8px;dis
           <button class="btn-danger" onclick="confirmReset()">Wipe All Scrolls (Reset Tournament)</button>
         </div>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ PHOTO TEST ══ -->
+<div id="view-phototest" class="view">
+  <div class="page">
+    <div class="page-title">
+      <h1>📸 Photo Test</h1>
+      <p>Testing base64 image quality via Firebase</p>
+    </div>
+    <div class="parchment section">
+      <div style="padding:14px">
+        <label class="form-label">Take or Choose a Photo</label>
+        <input type="file" accept="image/*" capture="environment" id="photo-test-input" style="color:var(--ink);margin:10px 0;display:block"/>
+        <button class="btn-primary" style="margin:0" id="photo-test-upload-btn">Upload Photo</button>
+        <div id="photo-test-status" style="margin-top:8px;font-size:12px;font-style:italic;color:var(--ink-light)">Pick a photo to begin</div>
+      </div>
+    </div>
+    <div class="parchment section">
+      <div class="section-title">Uploaded Photos</div>
+      <div id="photo-test-gallery" style="padding:10px"></div>
     </div>
   </div>
 </div>

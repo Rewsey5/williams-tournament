@@ -1358,17 +1358,62 @@ input[type=file]{display:none;}
       </div>
     </div>
     <div id="maester-panel" style="display:none">
-      <div class="parchment"><div class="section-title">⚔ Team Event Rankings</div><div id="maester-team"></div></div>
-      <div class="parchment"><div class="section-title">🥚 Dragon Eggs</div><div class="admin-row"><div class="muted" style="margin-bottom:8px">3 pts per egg · cap 30 per house</div><div class="bonus-row"><select id="egg-house"><option value="dragon">🐉 Dragon</option><option value="wolf">🐺 Wolf</option><option value="snake">🐍 Snake</option><option value="lion">🦁 Lion</option></select><input type="number" id="egg-count" placeholder="eggs" min="1" value="1"/><button class="btn-sm" onclick="addEggs()">+ Eggs</button></div><div id="maester-egg-totals" style="margin-top:8px;font-size:12px;color:var(--ink-light)"></div></div></div>
-      <div class="parchment"><div class="section-title">✨ Manual Honour Points</div><div class="admin-row"><div class="bonus-row"><select id="bonus-house"><option value="dragon">🐉 Dragon</option><option value="wolf">🐺 Wolf</option><option value="snake">🐍 Snake</option><option value="lion">🦁 Lion</option></select><input type="number" id="bonus-pts" placeholder="pts" value="1"/><button class="btn-sm" onclick="addBonus()">+ Add</button></div></div></div>
-      <div class="parchment"><div class="section-title">🧠 Riddle Control</div><div id="maester-riddles"></div></div>
-      <div class="parchment"><div class="section-title">🎨 Art Submissions (Private)</div><div id="maester-art" style="padding:10px"></div></div>
-      <div class="parchment"><div class="section-title">👑 Individual Honour Board</div><div id="maester-indiv"></div></div>
-      <div class="parchment"><div class="section-title">🏹 Archery Entries</div><div id="maester-arch"></div></div>
-      <div class="parchment"><div class="section-title">🔨 Nail Log Entries</div><div id="maester-nail"></div></div>
-      <div class="parchment"><div class="section-title">⚔ All Duels</div><div id="maester-duels"></div></div>
 
-      <div class="parchment"><div class="section-title">⚠ Danger Zone</div><div class="admin-row"><button class="btn-danger" onclick="confirmReset()">Wipe All Scrolls — Reset Tournament</button></div></div>
+      <div class="parchment">
+        <div class="collapse-header open" onclick="toggleSection('cs-team')"><span class="ch-title">⚔ Team Event Rankings</span><span class="ch-arrow">▼</span></div>
+        <div class="collapse-body open" id="cs-team"><div id="maester-team"></div></div>
+      </div>
+
+      <div class="parchment">
+        <div class="collapse-header open" onclick="toggleSection('cs-eggs')"><span class="ch-title">🥚 Dragon Eggs</span><span class="ch-arrow">▼</span></div>
+        <div class="collapse-body open" id="cs-eggs"><div class="admin-row"><div class="muted" style="margin-bottom:8px">3 pts per egg · cap 30 per house</div><div class="bonus-row"><select id="egg-house"><option value="dragon">🐉 Dragon</option><option value="wolf">🐺 Wolf</option><option value="snake">🐍 Snake</option><option value="lion">🦁 Lion</option></select><input type="number" id="egg-count" placeholder="eggs" min="1" value="1"/><button class="btn-sm" onclick="addEggs()">+ Eggs</button></div><div id="maester-egg-totals" style="margin-top:8px;font-size:12px;color:var(--ink-light)"></div></div></div>
+      </div>
+
+      <div class="parchment">
+        <div class="collapse-header open" onclick="toggleSection('cs-bonus')"><span class="ch-title">✨ Manual Honour Points</span><span class="ch-arrow">▼</span></div>
+        <div class="collapse-body open" id="cs-bonus"><div class="admin-row"><div class="bonus-row"><select id="bonus-house"><option value="dragon">🐉 Dragon</option><option value="wolf">🐺 Wolf</option><option value="snake">🐍 Snake</option><option value="lion">🦁 Lion</option></select><input type="number" id="bonus-pts" placeholder="pts" value="1"/><button class="btn-sm" onclick="addBonus()">+ Add</button></div></div></div>
+      </div>
+
+      <div class="parchment">
+        <div class="collapse-header open" onclick="toggleSection('cs-riddles')"><span class="ch-title">🧠 Riddle Control</span><span class="ch-arrow">▼</span></div>
+        <div class="collapse-body open" id="cs-riddles"><div id="maester-riddles"></div></div>
+      </div>
+
+      <div class="parchment">
+        <div class="collapse-header open" onclick="toggleSection('cs-bestdressed')"><span class="ch-title">👑 Best Dressed Results (Private)</span><span class="ch-arrow">▼</span></div>
+        <div class="collapse-body open" id="cs-bestdressed"><div id="maester-bestdressed"></div></div>
+      </div>
+
+      <div class="parchment">
+        <div class="collapse-header open" onclick="toggleSection('cs-art')"><span class="ch-title">🎨 Art Submissions (Private)</span><span class="ch-arrow">▼</span></div>
+        <div class="collapse-body open" id="cs-art"><div id="maester-art" style="padding:10px"></div></div>
+      </div>
+
+      <div class="parchment">
+        <div class="collapse-header open" onclick="toggleSection('cs-indiv')"><span class="ch-title">👑 Individual Honour Board</span><span class="ch-arrow">▼</span></div>
+        <div class="collapse-body open" id="cs-indiv"><div id="maester-indiv"></div></div>
+      </div>
+
+      <div class="parchment">
+        <div class="collapse-header" onclick="toggleSection('cs-arch')"><span class="ch-title">🏹 Archery Entries</span><span class="ch-arrow">▼</span></div>
+        <div class="collapse-body" id="cs-arch"><div id="maester-arch"></div></div>
+      </div>
+
+      <div class="parchment">
+        <div class="collapse-header" onclick="toggleSection('cs-nail')"><span class="ch-title">🔨 Nail Log Entries</span><span class="ch-arrow">▼</span></div>
+        <div class="collapse-body" id="cs-nail"><div id="maester-nail"></div></div>
+      </div>
+
+      <div class="parchment">
+        <div class="collapse-header" onclick="toggleSection('cs-duels')"><span class="ch-title">⚔ All Duels</span><span class="ch-arrow">▼</span></div>
+        <div class="collapse-body" id="cs-duels"><div id="maester-duels"></div></div>
+      </div>
+
+      <div class="parchment">
+        <div class="collapse-header" onclick="toggleSection('cs-danger')"><span class="ch-title">⚠ Danger Zone</span><span class="ch-arrow">▼</span></div>
+        <div class="collapse-body" id="cs-danger"><div class="admin-row"><button class="btn-danger" onclick="confirmReset()">Wipe All Scrolls — Reset Tournament</button></div></div>
+      </div>
+
     </div>
   </div>
 </div>

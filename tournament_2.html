@@ -1,0 +1,1404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>William's Tournament</title>
+<script>
+var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this.parsedData=[];for(var b=[],d=0,e=this.data.length;e>d;d++){var f=this.data.charCodeAt(d);f>65536?(b[0]=240|(1835008&f)>>>18,b[1]=128|(258048&f)>>>12,b[2]=128|(4032&f)>>>6,b[3]=128|63&f):f>2048?(b[0]=224|(61440&f)>>>12,b[1]=128|(4032&f)>>>6,b[2]=128|63&f):f>128?(b[0]=192|(1984&f)>>>6,b[1]=128|63&f):b[0]=f,this.parsedData=this.parsedData.concat(b)}this.parsedData.length!=this.data.length&&(this.parsedData.unshift(191),this.parsedData.unshift(187),this.parsedData.unshift(239))}function b(a,b){this.typeNumber=a,this.errorCorrectLevel=b,this.modules=null,this.moduleCount=0,this.dataCache=null,this.dataList=[]}function i(a,b){if(void 0==a.length)throw new Error(a.length+"/"+b);for(var c=0;c<a.length&&0==a[c];)c++;this.num=new Array(a.length-c+b);for(var d=0;d<a.length-c;d++)this.num[d]=a[d+c]}function j(a,b){this.totalCount=a,this.dataCount=b}function k(){this.buffer=[],this.length=0}function m(){return"undefined"!=typeof CanvasRenderingContext2D}function n(){var a=!1,b=navigator.userAgent;return/android/i.test(b)&&(a=!0,aMat=b.toString().match(/android ([0-9]\.[0-9])/i),aMat&&aMat[1]&&(a=parseFloat(aMat[1]))),a}function r(a,b){for(var c=1,e=s(a),f=0,g=l.length;g>=f;f++){var h=0;switch(b){case d.L:h=l[f][0];break;case d.M:h=l[f][1];break;case d.Q:h=l[f][2];break;case d.H:h=l[f][3]}if(h>=e)break;c++}if(c>l.length)throw new Error("Too long data");return c}function s(a){var b=encodeURI(a).toString().replace(/\%[0-9a-fA-F]{2}/g,"a");return b.length+(b.length!=a?3:0)}a.prototype={getLength:function(){return this.parsedData.length},write:function(a){for(var b=0,c=this.parsedData.length;c>b;b++)a.put(this.parsedData[b],8)}},b.prototype={addData:function(b){var c=new a(b);this.dataList.push(c),this.dataCache=null},isDark:function(a,b){if(0>a||this.moduleCount<=a||0>b||this.moduleCount<=b)throw new Error(a+","+b);return this.modules[a][b]},getModuleCount:function(){return this.moduleCount},make:function(){this.makeImpl(!1,this.getBestMaskPattern())},makeImpl:function(a,c){this.moduleCount=4*this.typeNumber+17,this.modules=new Array(this.moduleCount);for(var d=0;d<this.moduleCount;d++){this.modules[d]=new Array(this.moduleCount);for(var e=0;e<this.moduleCount;e++)this.modules[d][e]=null}this.setupPositionProbePattern(0,0),this.setupPositionProbePattern(this.moduleCount-7,0),this.setupPositionProbePattern(0,this.moduleCount-7),this.setupPositionAdjustPattern(),this.setupTimingPattern(),this.setupTypeInfo(a,c),this.typeNumber>=7&&this.setupTypeNumber(a),null==this.dataCache&&(this.dataCache=b.createData(this.typeNumber,this.errorCorrectLevel,this.dataList)),this.mapData(this.dataCache,c)},setupPositionProbePattern:function(a,b){for(var c=-1;7>=c;c++)if(!(-1>=a+c||this.moduleCount<=a+c))for(var d=-1;7>=d;d++)-1>=b+d||this.moduleCount<=b+d||(this.modules[a+c][b+d]=c>=0&&6>=c&&(0==d||6==d)||d>=0&&6>=d&&(0==c||6==c)||c>=2&&4>=c&&d>=2&&4>=d?!0:!1)},getBestMaskPattern:function(){for(var a=0,b=0,c=0;8>c;c++){this.makeImpl(!0,c);var d=f.getLostPoint(this);(0==c||a>d)&&(a=d,b=c)}return b},createMovieClip:function(a,b,c){var d=a.createEmptyMovieClip(b,c),e=1;this.make();for(var f=0;f<this.modules.length;f++)for(var g=f*e,h=0;h<this.modules[f].length;h++){var i=h*e,j=this.modules[f][h];j&&(d.beginFill(0,100),d.moveTo(i,g),d.lineTo(i+e,g),d.lineTo(i+e,g+e),d.lineTo(i,g+e),d.endFill())}return d},setupTimingPattern:function(){for(var a=8;a<this.moduleCount-8;a++)null==this.modules[a][6]&&(this.modules[a][6]=0==a%2);for(var b=8;b<this.moduleCount-8;b++)null==this.modules[6][b]&&(this.modules[6][b]=0==b%2)},setupPositionAdjustPattern:function(){for(var a=f.getPatternPosition(this.typeNumber),b=0;b<a.length;b++)for(var c=0;c<a.length;c++){var d=a[b],e=a[c];if(null==this.modules[d][e])for(var g=-2;2>=g;g++)for(var h=-2;2>=h;h++)this.modules[d+g][e+h]=-2==g||2==g||-2==h||2==h||0==g&&0==h?!0:!1}},setupTypeNumber:function(a){for(var b=f.getBCHTypeNumber(this.typeNumber),c=0;18>c;c++){var d=!a&&1==(1&b>>c);this.modules[Math.floor(c/3)][c%3+this.moduleCount-8-3]=d}for(var c=0;18>c;c++){var d=!a&&1==(1&b>>c);this.modules[c%3+this.moduleCount-8-3][Math.floor(c/3)]=d}},setupTypeInfo:function(a,b){for(var c=this.errorCorrectLevel<<3|b,d=f.getBCHTypeInfo(c),e=0;15>e;e++){var g=!a&&1==(1&d>>e);6>e?this.modules[e][8]=g:8>e?this.modules[e+1][8]=g:this.modules[this.moduleCount-15+e][8]=g}for(var e=0;15>e;e++){var g=!a&&1==(1&d>>e);8>e?this.modules[8][this.moduleCount-e-1]=g:9>e?this.modules[8][15-e-1+1]=g:this.modules[8][15-e-1]=g}this.modules[this.moduleCount-8][8]=!a},mapData:function(a,b){for(var c=-1,d=this.moduleCount-1,e=7,g=0,h=this.moduleCount-1;h>0;h-=2)for(6==h&&h--;;){for(var i=0;2>i;i++)if(null==this.modules[d][h-i]){var j=!1;g<a.length&&(j=1==(1&a[g]>>>e));var k=f.getMask(b,d,h-i);k&&(j=!j),this.modules[d][h-i]=j,e--,-1==e&&(g++,e=7)}if(d+=c,0>d||this.moduleCount<=d){d-=c,c=-c;break}}}},b.PAD0=236,b.PAD1=17,b.createData=function(a,c,d){for(var e=j.getRSBlocks(a,c),g=new k,h=0;h<d.length;h++){var i=d[h];g.put(i.mode,4),g.put(i.getLength(),f.getLengthInBits(i.mode,a)),i.write(g)}for(var l=0,h=0;h<e.length;h++)l+=e[h].dataCount;if(g.getLengthInBits()>8*l)throw new Error("code length overflow. ("+g.getLengthInBits()+">"+8*l+")");for(g.getLengthInBits()+4<=8*l&&g.put(0,4);0!=g.getLengthInBits()%8;)g.putBit(!1);for(;;){if(g.getLengthInBits()>=8*l)break;if(g.put(b.PAD0,8),g.getLengthInBits()>=8*l)break;g.put(b.PAD1,8)}return b.createBytes(g,e)},b.createBytes=function(a,b){for(var c=0,d=0,e=0,g=new Array(b.length),h=new Array(b.length),j=0;j<b.length;j++){var k=b[j].dataCount,l=b[j].totalCount-k;d=Math.max(d,k),e=Math.max(e,l),g[j]=new Array(k);for(var m=0;m<g[j].length;m++)g[j][m]=255&a.buffer[m+c];c+=k;var n=f.getErrorCorrectPolynomial(l),o=new i(g[j],n.getLength()-1),p=o.mod(n);h[j]=new Array(n.getLength()-1);for(var m=0;m<h[j].length;m++){var q=m+p.getLength()-h[j].length;h[j][m]=q>=0?p.get(q):0}}for(var r=0,m=0;m<b.length;m++)r+=b[m].totalCount;for(var s=new Array(r),t=0,m=0;d>m;m++)for(var j=0;j<b.length;j++)m<g[j].length&&(s[t++]=g[j][m]);for(var m=0;e>m;m++)for(var j=0;j<b.length;j++)m<h[j].length&&(s[t++]=h[j][m]);return s};for(var c={MODE_NUMBER:1,MODE_ALPHA_NUM:2,MODE_8BIT_BYTE:4,MODE_KANJI:8},d={L:1,M:0,Q:3,H:2},e={PATTERN000:0,PATTERN001:1,PATTERN010:2,PATTERN011:3,PATTERN100:4,PATTERN101:5,PATTERN110:6,PATTERN111:7},f={PATTERN_POSITION_TABLE:[[],[6,18],[6,22],[6,26],[6,30],[6,34],[6,22,38],[6,24,42],[6,26,46],[6,28,50],[6,30,54],[6,32,58],[6,34,62],[6,26,46,66],[6,26,48,70],[6,26,50,74],[6,30,54,78],[6,30,56,82],[6,30,58,86],[6,34,62,90],[6,28,50,72,94],[6,26,50,74,98],[6,30,54,78,102],[6,28,54,80,106],[6,32,58,84,110],[6,30,58,86,114],[6,34,62,90,118],[6,26,50,74,98,122],[6,30,54,78,102,126],[6,26,52,78,104,130],[6,30,56,82,108,134],[6,34,60,86,112,138],[6,30,58,86,114,142],[6,34,62,90,118,146],[6,30,54,78,102,126,150],[6,24,50,76,102,128,154],[6,28,54,80,106,132,158],[6,32,58,84,110,136,162],[6,26,54,82,110,138,166],[6,30,58,86,114,142,170]],G15:1335,G18:7973,G15_MASK:21522,getBCHTypeInfo:function(a){for(var b=a<<10;f.getBCHDigit(b)-f.getBCHDigit(f.G15)>=0;)b^=f.G15<<f.getBCHDigit(b)-f.getBCHDigit(f.G15);return(a<<10|b)^f.G15_MASK},getBCHTypeNumber:function(a){for(var b=a<<12;f.getBCHDigit(b)-f.getBCHDigit(f.G18)>=0;)b^=f.G18<<f.getBCHDigit(b)-f.getBCHDigit(f.G18);return a<<12|b},getBCHDigit:function(a){for(var b=0;0!=a;)b++,a>>>=1;return b},getPatternPosition:function(a){return f.PATTERN_POSITION_TABLE[a-1]},getMask:function(a,b,c){switch(a){case e.PATTERN000:return 0==(b+c)%2;case e.PATTERN001:return 0==b%2;case e.PATTERN010:return 0==c%3;case e.PATTERN011:return 0==(b+c)%3;case e.PATTERN100:return 0==(Math.floor(b/2)+Math.floor(c/3))%2;case e.PATTERN101:return 0==b*c%2+b*c%3;case e.PATTERN110:return 0==(b*c%2+b*c%3)%2;case e.PATTERN111:return 0==(b*c%3+(b+c)%2)%2;default:throw new Error("bad maskPattern:"+a)}},getErrorCorrectPolynomial:function(a){for(var b=new i([1],0),c=0;a>c;c++)b=b.multiply(new i([1,g.gexp(c)],0));return b},getLengthInBits:function(a,b){if(b>=1&&10>b)switch(a){case c.MODE_NUMBER:return 10;case c.MODE_ALPHA_NUM:return 9;case c.MODE_8BIT_BYTE:return 8;case c.MODE_KANJI:return 8;default:throw new Error("mode:"+a)}else if(27>b)switch(a){case c.MODE_NUMBER:return 12;case c.MODE_ALPHA_NUM:return 11;case c.MODE_8BIT_BYTE:return 16;case c.MODE_KANJI:return 10;default:throw new Error("mode:"+a)}else{if(!(41>b))throw new Error("type:"+b);switch(a){case c.MODE_NUMBER:return 14;case c.MODE_ALPHA_NUM:return 13;case c.MODE_8BIT_BYTE:return 16;case c.MODE_KANJI:return 12;default:throw new Error("mode:"+a)}}},getLostPoint:function(a){for(var b=a.getModuleCount(),c=0,d=0;b>d;d++)for(var e=0;b>e;e++){for(var f=0,g=a.isDark(d,e),h=-1;1>=h;h++)if(!(0>d+h||d+h>=b))for(var i=-1;1>=i;i++)0>e+i||e+i>=b||(0!=h||0!=i)&&g==a.isDark(d+h,e+i)&&f++;f>5&&(c+=3+f-5)}for(var d=0;b-1>d;d++)for(var e=0;b-1>e;e++){var j=0;a.isDark(d,e)&&j++,a.isDark(d+1,e)&&j++,a.isDark(d,e+1)&&j++,a.isDark(d+1,e+1)&&j++,(0==j||4==j)&&(c+=3)}for(var d=0;b>d;d++)for(var e=0;b-6>e;e++)a.isDark(d,e)&&!a.isDark(d,e+1)&&a.isDark(d,e+2)&&a.isDark(d,e+3)&&a.isDark(d,e+4)&&!a.isDark(d,e+5)&&a.isDark(d,e+6)&&(c+=40);for(var e=0;b>e;e++)for(var d=0;b-6>d;d++)a.isDark(d,e)&&!a.isDark(d+1,e)&&a.isDark(d+2,e)&&a.isDark(d+3,e)&&a.isDark(d+4,e)&&!a.isDark(d+5,e)&&a.isDark(d+6,e)&&(c+=40);for(var k=0,e=0;b>e;e++)for(var d=0;b>d;d++)a.isDark(d,e)&&k++;var l=Math.abs(100*k/b/b-50)/5;return c+=10*l}},g={glog:function(a){if(1>a)throw new Error("glog("+a+")");return g.LOG_TABLE[a]},gexp:function(a){for(;0>a;)a+=255;for(;a>=256;)a-=255;return g.EXP_TABLE[a]},EXP_TABLE:new Array(256),LOG_TABLE:new Array(256)},h=0;8>h;h++)g.EXP_TABLE[h]=1<<h;for(var h=8;256>h;h++)g.EXP_TABLE[h]=g.EXP_TABLE[h-4]^g.EXP_TABLE[h-5]^g.EXP_TABLE[h-6]^g.EXP_TABLE[h-8];for(var h=0;255>h;h++)g.LOG_TABLE[g.EXP_TABLE[h]]=h;i.prototype={get:function(a){return this.num[a]},getLength:function(){return this.num.length},multiply:function(a){for(var b=new Array(this.getLength()+a.getLength()-1),c=0;c<this.getLength();c++)for(var d=0;d<a.getLength();d++)b[c+d]^=g.gexp(g.glog(this.get(c))+g.glog(a.get(d)));return new i(b,0)},mod:function(a){if(this.getLength()-a.getLength()<0)return this;for(var b=g.glog(this.get(0))-g.glog(a.get(0)),c=new Array(this.getLength()),d=0;d<this.getLength();d++)c[d]=this.get(d);for(var d=0;d<a.getLength();d++)c[d]^=g.gexp(g.glog(a.get(d))+b);return new i(c,0).mod(a)}},j.RS_BLOCK_TABLE=[[1,26,19],[1,26,16],[1,26,13],[1,26,9],[1,44,34],[1,44,28],[1,44,22],[1,44,16],[1,70,55],[1,70,44],[2,35,17],[2,35,13],[1,100,80],[2,50,32],[2,50,24],[4,25,9],[1,134,108],[2,67,43],[2,33,15,2,34,16],[2,33,11,2,34,12],[2,86,68],[4,43,27],[4,43,19],[4,43,15],[2,98,78],[4,49,31],[2,32,14,4,33,15],[4,39,13,1,40,14],[2,121,97],[2,60,38,2,61,39],[4,40,18,2,41,19],[4,40,14,2,41,15],[2,146,116],[3,58,36,2,59,37],[4,36,16,4,37,17],[4,36,12,4,37,13],[2,86,68,2,87,69],[4,69,43,1,70,44],[6,43,19,2,44,20],[6,43,15,2,44,16],[4,101,81],[1,80,50,4,81,51],[4,50,22,4,51,23],[3,36,12,8,37,13],[2,116,92,2,117,93],[6,58,36,2,59,37],[4,46,20,6,47,21],[7,42,14,4,43,15],[4,133,107],[8,59,37,1,60,38],[8,44,20,4,45,21],[12,33,11,4,34,12],[3,145,115,1,146,116],[4,64,40,5,65,41],[11,36,16,5,37,17],[11,36,12,5,37,13],[5,109,87,1,110,88],[5,65,41,5,66,42],[5,54,24,7,55,25],[11,36,12],[5,122,98,1,123,99],[7,73,45,3,74,46],[15,43,19,2,44,20],[3,45,15,13,46,16],[1,135,107,5,136,108],[10,74,46,1,75,47],[1,50,22,15,51,23],[2,42,14,17,43,15],[5,150,120,1,151,121],[9,69,43,4,70,44],[17,50,22,1,51,23],[2,42,14,19,43,15],[3,141,113,4,142,114],[3,70,44,11,71,45],[17,47,21,4,48,22],[9,39,13,16,40,14],[3,135,107,5,136,108],[3,67,41,13,68,42],[15,54,24,5,55,25],[15,43,15,10,44,16],[4,144,116,4,145,117],[17,68,42],[17,50,22,6,51,23],[19,46,16,6,47,17],[2,139,111,7,140,112],[17,74,46],[7,54,24,16,55,25],[34,37,13],[4,151,121,5,152,122],[4,75,47,14,76,48],[11,54,24,14,55,25],[16,45,15,14,46,16],[6,147,117,4,148,118],[6,73,45,14,74,46],[11,54,24,16,55,25],[30,46,16,2,47,17],[8,132,106,4,133,107],[8,75,47,13,76,48],[7,54,24,22,55,25],[22,45,15,13,46,16],[10,142,114,2,143,115],[19,74,46,4,75,47],[28,50,22,6,51,23],[33,46,16,4,47,17],[8,152,122,4,153,123],[22,73,45,3,74,46],[8,53,23,26,54,24],[12,45,15,28,46,16],[3,147,117,10,148,118],[3,73,45,23,74,46],[4,54,24,31,55,25],[11,45,15,31,46,16],[7,146,116,7,147,117],[21,73,45,7,74,46],[1,53,23,37,54,24],[19,45,15,26,46,16],[5,145,115,10,146,116],[19,75,47,10,76,48],[15,54,24,25,55,25],[23,45,15,25,46,16],[13,145,115,3,146,116],[2,74,46,29,75,47],[42,54,24,1,55,25],[23,45,15,28,46,16],[17,145,115],[10,74,46,23,75,47],[10,54,24,35,55,25],[19,45,15,35,46,16],[17,145,115,1,146,116],[14,74,46,21,75,47],[29,54,24,19,55,25],[11,45,15,46,46,16],[13,145,115,6,146,116],[14,74,46,23,75,47],[44,54,24,7,55,25],[59,46,16,1,47,17],[12,151,121,7,152,122],[12,75,47,26,76,48],[39,54,24,14,55,25],[22,45,15,41,46,16],[6,151,121,14,152,122],[6,75,47,34,76,48],[46,54,24,10,55,25],[2,45,15,64,46,16],[17,152,122,4,153,123],[29,74,46,14,75,47],[49,54,24,10,55,25],[24,45,15,46,46,16],[4,152,122,18,153,123],[13,74,46,32,75,47],[48,54,24,14,55,25],[42,45,15,32,46,16],[20,147,117,4,148,118],[40,75,47,7,76,48],[43,54,24,22,55,25],[10,45,15,67,46,16],[19,148,118,6,149,119],[18,75,47,31,76,48],[34,54,24,34,55,25],[20,45,15,61,46,16]],j.getRSBlocks=function(a,b){var c=j.getRsBlockTable(a,b);if(void 0==c)throw new Error("bad rs block @ typeNumber:"+a+"/errorCorrectLevel:"+b);for(var d=c.length/3,e=[],f=0;d>f;f++)for(var g=c[3*f+0],h=c[3*f+1],i=c[3*f+2],k=0;g>k;k++)e.push(new j(h,i));return e},j.getRsBlockTable=function(a,b){switch(b){case d.L:return j.RS_BLOCK_TABLE[4*(a-1)+0];case d.M:return j.RS_BLOCK_TABLE[4*(a-1)+1];case d.Q:return j.RS_BLOCK_TABLE[4*(a-1)+2];case d.H:return j.RS_BLOCK_TABLE[4*(a-1)+3];default:return void 0}},k.prototype={get:function(a){var b=Math.floor(a/8);return 1==(1&this.buffer[b]>>>7-a%8)},put:function(a,b){for(var c=0;b>c;c++)this.putBit(1==(1&a>>>b-c-1))},getLengthInBits:function(){return this.length},putBit:function(a){var b=Math.floor(this.length/8);this.buffer.length<=b&&this.buffer.push(0),a&&(this.buffer[b]|=128>>>this.length%8),this.length++}};var l=[[17,14,11,7],[32,26,20,14],[53,42,32,24],[78,62,46,34],[106,84,60,44],[134,106,74,58],[154,122,86,64],[192,152,108,84],[230,180,130,98],[271,213,151,119],[321,251,177,137],[367,287,203,155],[425,331,241,177],[458,362,258,194],[520,412,292,220],[586,450,322,250],[644,504,364,280],[718,560,394,310],[792,624,442,338],[858,666,482,382],[929,711,509,403],[1003,779,565,439],[1091,857,611,461],[1171,911,661,511],[1273,997,715,535],[1367,1059,751,593],[1465,1125,805,625],[1528,1190,868,658],[1628,1264,908,698],[1732,1370,982,742],[1840,1452,1030,790],[1952,1538,1112,842],[2068,1628,1168,898],[2188,1722,1228,958],[2303,1809,1283,983],[2431,1911,1351,1051],[2563,1989,1423,1093],[2699,2099,1499,1139],[2809,2213,1579,1219],[2953,2331,1663,1273]],o=function(){var a=function(a,b){this._el=a,this._htOption=b};return a.prototype.draw=function(a){function g(a,b){var c=document.createElementNS("http://www.w3.org/2000/svg",a);for(var d in b)b.hasOwnProperty(d)&&c.setAttribute(d,b[d]);return c}var b=this._htOption,c=this._el,d=a.getModuleCount();Math.floor(b.width/d),Math.floor(b.height/d),this.clear();var h=g("svg",{viewBox:"0 0 "+String(d)+" "+String(d),width:"100%",height:"100%",fill:b.colorLight});h.setAttributeNS("http://www.w3.org/2000/xmlns/","xmlns:xlink","http://www.w3.org/1999/xlink"),c.appendChild(h),h.appendChild(g("rect",{fill:b.colorDark,width:"1",height:"1",id:"template"}));for(var i=0;d>i;i++)for(var j=0;d>j;j++)if(a.isDark(i,j)){var k=g("use",{x:String(i),y:String(j)});k.setAttributeNS("http://www.w3.org/1999/xlink","href","#template"),h.appendChild(k)}},a.prototype.clear=function(){for(;this._el.hasChildNodes();)this._el.removeChild(this._el.lastChild)},a}(),p="svg"===document.documentElement.tagName.toLowerCase(),q=p?o:m()?function(){function a(){this._elImage.src=this._elCanvas.toDataURL("image/png"),this._elImage.style.display="block",this._elCanvas.style.display="none"}function d(a,b){var c=this;if(c._fFail=b,c._fSuccess=a,null===c._bSupportDataURI){var d=document.createElement("img"),e=function(){c._bSupportDataURI=!1,c._fFail&&_fFail.call(c)},f=function(){c._bSupportDataURI=!0,c._fSuccess&&c._fSuccess.call(c)};return d.onabort=e,d.onerror=e,d.onload=f,d.src="data:image/gif;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg==",void 0}c._bSupportDataURI===!0&&c._fSuccess?c._fSuccess.call(c):c._bSupportDataURI===!1&&c._fFail&&c._fFail.call(c)}if(this._android&&this._android<=2.1){var b=1/window.devicePixelRatio,c=CanvasRenderingContext2D.prototype.drawImage;CanvasRenderingContext2D.prototype.drawImage=function(a,d,e,f,g,h,i,j){if("nodeName"in a&&/img/i.test(a.nodeName))for(var l=arguments.length-1;l>=1;l--)arguments[l]=arguments[l]*b;else"undefined"==typeof j&&(arguments[1]*=b,arguments[2]*=b,arguments[3]*=b,arguments[4]*=b);c.apply(this,arguments)}}var e=function(a,b){this._bIsPainted=!1,this._android=n(),this._htOption=b,this._elCanvas=document.createElement("canvas"),this._elCanvas.width=b.width,this._elCanvas.height=b.height,a.appendChild(this._elCanvas),this._el=a,this._oContext=this._elCanvas.getContext("2d"),this._bIsPainted=!1,this._elImage=document.createElement("img"),this._elImage.style.display="none",this._el.appendChild(this._elImage),this._bSupportDataURI=null};return e.prototype.draw=function(a){var b=this._elImage,c=this._oContext,d=this._htOption,e=a.getModuleCount(),f=d.width/e,g=d.height/e,h=Math.round(f),i=Math.round(g);b.style.display="none",this.clear();for(var j=0;e>j;j++)for(var k=0;e>k;k++){var l=a.isDark(j,k),m=k*f,n=j*g;c.strokeStyle=l?d.colorDark:d.colorLight,c.lineWidth=1,c.fillStyle=l?d.colorDark:d.colorLight,c.fillRect(m,n,f,g),c.strokeRect(Math.floor(m)+.5,Math.floor(n)+.5,h,i),c.strokeRect(Math.ceil(m)-.5,Math.ceil(n)-.5,h,i)}this._bIsPainted=!0},e.prototype.makeImage=function(){this._bIsPainted&&d.call(this,a)},e.prototype.isPainted=function(){return this._bIsPainted},e.prototype.clear=function(){this._oContext.clearRect(0,0,this._elCanvas.width,this._elCanvas.height),this._bIsPainted=!1},e.prototype.round=function(a){return a?Math.floor(1e3*a)/1e3:a},e}():function(){var a=function(a,b){this._el=a,this._htOption=b};return a.prototype.draw=function(a){for(var b=this._htOption,c=this._el,d=a.getModuleCount(),e=Math.floor(b.width/d),f=Math.floor(b.height/d),g=['<table style="border:0;border-collapse:collapse;">'],h=0;d>h;h++){g.push("<tr>");for(var i=0;d>i;i++)g.push('<td style="border:0;border-collapse:collapse;padding:0;margin:0;width:'+e+"px;height:"+f+"px;background-color:"+(a.isDark(h,i)?b.colorDark:b.colorLight)+';"></td>');g.push("</tr>")}g.push("</table>"),c.innerHTML=g.join("");var j=c.childNodes[0],k=(b.width-j.offsetWidth)/2,l=(b.height-j.offsetHeight)/2;k>0&&l>0&&(j.style.margin=l+"px "+k+"px")},a.prototype.clear=function(){this._el.innerHTML=""},a}();QRCode=function(a,b){if(this._htOption={width:256,height:256,typeNumber:4,colorDark:"#000000",colorLight:"#ffffff",correctLevel:d.H},"string"==typeof b&&(b={text:b}),b)for(var c in b)this._htOption[c]=b[c];"string"==typeof a&&(a=document.getElementById(a)),this._android=n(),this._el=a,this._oQRCode=null,this._oDrawing=new q(this._el,this._htOption),this._htOption.text&&this.makeCode(this._htOption.text)},QRCode.prototype.makeCode=function(a){this._oQRCode=new b(r(a,this._htOption.correctLevel),this._htOption.correctLevel),this._oQRCode.addData(a),this._oQRCode.make(),this._el.title=a,this._oDrawing.draw(this._oQRCode),this.makeImage()},QRCode.prototype.makeImage=function(){"function"==typeof this._oDrawing.makeImage&&(!this._android||this._android>=3)&&this._oDrawing.makeImage()},QRCode.prototype.clear=function(){this._oDrawing.clear()},QRCode.CorrectLevel=d}();
+window.QRCode = QRCode;
+</script>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, doc, getDoc, setDoc, collection, addDoc, getDocs, onSnapshot, deleteDoc, serverTimestamp, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDjaIvNU4cIh6alK_MZRoRhRyUt6S3-0qY",
+  authDomain: "williams-tournament.firebaseapp.com",
+  projectId: "williams-tournament",
+  storageBucket: "williams-tournament.firebasestorage.app",
+  messagingSenderId: "433319550894",
+  appId: "1:433319550894:web:e93c53d0ea9343a9ffb23f"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+// ══ AUDIO UNLOCK ══
+window.unlockAudio = function(){
+  const splash = document.getElementById('audio-splash');
+  if(splash) splash.style.display='none';
+  // Unlock audio context by playing silence
+  try{
+    const ctx = new(window.AudioContext||window.webkitAudioContext)();
+    const buf = ctx.createBuffer(1,1,22050);
+    const src = ctx.createBufferSource();
+    src.buffer=buf; src.connect(ctx.destination); src.start(0);
+    ctx.resume();
+  }catch(e){}
+  // Prime all audio files
+  Object.values(SFX).forEach(s=>{ try{s.volume=0;s.play().then(()=>{s.pause();s.currentTime=0;s.volume=0.8;}).catch(()=>{});} catch(e){} });
+};
+
+// ══ AUDIO ══
+const SFX = {
+  sword:  new Audio('sword.wav'),
+  hammer: new Audio('hammer.wav'),
+  bow:    new Audio('bow.mp3'),
+};
+// Preload on page ready
+window.addEventListener('load', () => {
+  Object.values(SFX).forEach(s => { s.preload = 'auto'; s.load(); });
+});
+function playSound(k){ try{ const s=SFX[k]; if(s){s.currentTime=0;s.volume=0.8;s.play().catch(()=>{});} }catch(e){} }
+function haptic(p){ try{ if(navigator.vibrate) navigator.vibrate(p); }catch(e){} }
+
+// ══ GUESTS ══
+const GUESTS = ["Will","Rachel","Leigh","Charlie","Lanni","Tim","Anastashia","Tay","Ellen","Di","Steve","Sarah","Jack","Alex McDonald","Masia","Ollie","Liam","Siobhan","Xavier","Tamrin","Ryan","Sienna","Seb","Charlotte","Angus","Bec","Morgan","Maddy Brown","Maddy","Alex Broussard","Pat","Caitlin","Aaron","Kitty","Mim","Eska","Jojo","Rich","Ivy","Tilly","Henry","Paul Smith","Holly","Sophie","Eddy","Mike","Teresa","Emily","Kane","James","Dianna","Josh","Kelly","Noah","Len","Karen","Dianne Anderson","Pete","David","Kate","Tamara","Dave","Francis","Maeve","Zozo","Stephen McDonald","Steven Rewse-Bongers","Lilian","Eleanor","Harriet","Amber","Ducky","Patrice","Sam","Clara","Mitch","Grace","Alfie","Ewan","Paul Harrison","Dianne McDonald"];
+
+const HOUSES = [
+  {id:'dragon',name:'Dragon',emoji:'🐉',color:'#c0392b',img:'house_dragon_transparent.png'},
+  {id:'wolf',  name:'Wolf',  emoji:'🐺',color:'#2471a3',img:'house_wolf_transparent.png'},
+  {id:'snake', name:'Snake', emoji:'🐍',color:'#1e8449',img:'house_snake_transparent.png'},
+  {id:'lion',  name:'Lion',  emoji:'🦁',color:'#b7770d',img:'house_lion_transparent.png'},
+];
+
+const TEAM_EVENTS = [
+  {id:'tug',         name:'Tug of War',       emoji:'💪'},
+  {id:'wheelbarrow', name:'Wheelbarrow Race',  emoji:'🏃'},
+  {id:'filltub',     name:'Fill a Tub',        emoji:'🪣'},
+  {id:'joust',       name:'Pool Noodle Joust', emoji:'🤺'},
+];
+
+const RANK_PTS = [30,20,10,0];
+const STARTING_PTS = 5;
+const ADMIN_PW = '21';
+const RIDDLE_PTS = 7;
+
+const RIDDLES = [
+  {id:'r1', q:"I have cities, but no houses live there. I have mountains, but no trees grow there. I have water, but no fish swim there. I have roads, but no carts travel there. What am I?", hint:"A cartographer's greatest creation.", keys:["map"]},
+  {id:'r2', q:"A knight rides into a village on Friday, stays two days, and leaves on Friday. How?", hint:"The answer lies not in the days, but in a name.", keys:["friday"]},
+  {id:'r3', q:"The more you take from me, the larger I become. What am I?", hint:"Found in the earth beneath thy feet.", keys:["hole"]},
+  {id:'r4', q:"I am what every knight rides toward, what every ship sails for, what every dreamer chases. Yet no matter how far you travel, I remain exactly as far away as when you began. What am I?", hint:"Where the earth meets the sky.", keys:["horizon"]},
+  {id:'r5', q:"I have four legs but cannot run, a back but no spine. I bear the weight of kings and peasants alike, yet I have never walked a single step. What am I?", hint:"Found in every great hall, around every feasting table.", keys:["chair"]},
+  {id:'r6', q:"I am always hungry, I must always be fed. The finger I touch will soon turn red. What am I?", hint:"It warms the great hall on a winter's night.", keys:["fire"]},
+  {id:'r7', q:"I am lighter than a feather, yet the strongest man cannot hold me for more than a few minutes. What am I?", hint:"Every living soul does it without thinking.", keys:["breath","air"]},
+  {id:'r8', q:"A blacksmith has a brother, but the brother has no brother. How?", hint:"Question thine assumptions about the blacksmith.", keys:["woman","sister","female","she","her"]},
+  {id:'r9', q:"What can run but never walks, has a mouth but never talks, has a head but never weeps, has a bed but never sleeps?", hint:"It flows from the mountains to the sea.", keys:["river","stream"]},
+  {id:'r10',q:"I am the beginning of everything, the end of everywhere, the beginning of eternity, the end of time and space. What am I?", hint:"Look not for meaning — look for form.", keys:["e","letter e","the letter e"]},
+];
+
+// ══ DEVICE MEMORY ══
+const DID = (() => { let d=localStorage.getItem('wt_did'); if(!d){d='d_'+Math.random().toString(36).slice(2);localStorage.setItem('wt_did',d);} return d; })();
+function rememberMe(name,house){
+  if(!name)return;
+  // Track frequency per name
+  const freq=JSON.parse(localStorage.getItem('wt_freq')||'{}');
+  freq[name]=(freq[name]||0)+1;
+  localStorage.setItem('wt_freq',JSON.stringify(freq));
+  // Most frequent name wins
+  const topName=Object.entries(freq).sort((a,b)=>b[1]-a[1])[0][0];
+  localStorage.setItem('wt_name',topName);
+  localStorage.setItem('wt_house',house);
+}
+function getMyName(){ return localStorage.getItem('wt_name')||''; }
+function getMyHouse(){ return localStorage.getItem('wt_house')||''; }
+
+// ══ STATE ══
+let S = { teamRankings:{}, eggs:{dragon:0,wolf:0,snake:0,lion:0}, bonus:{dragon:0,wolf:0,snake:0,lion:0}, playerHouses:{}, archery:[], nail:[], duels:[], riddles:{}, art:[] };
+let adminUnlocked = false;
+let currentView = 'scoreboard';
+let submitting = false;
+
+// ══ FIRESTORE ══
+async function fsSet(path,data){ await setDoc(doc(db,...path.split('/')),data,{merge:true}); }
+async function fsAdd(col,data){ return await addDoc(collection(db,col),{...data,ts:serverTimestamp()}); }
+async function fsDel(col,id){ await deleteDoc(doc(db,col,id)); }
+async function fsGetAll(col){ const s=await getDocs(collection(db,col)); return s.docs.map(d=>({id:d.id,...d.data()})); }
+
+async function cleanupBadDuels(){
+  // Remove any duels with missing/blank challenger or opponent names (corrupt test data)
+  try{
+    const snap=await getDocs(collection(db,'duels'));
+    for(const d of snap.docs){
+      const data=d.data();
+      if(!data.p1||String(data.p1).trim()===''||!data.p2||String(data.p2).trim()===''){
+        await deleteDoc(d.ref);
+      }
+    }
+  }catch(e){}
+}
+
+async function loadAll(){
+  showLoading(true);
+  await cleanupBadDuels();
+  try {
+    const [r,e,b,h,rd,ar,na,du,art,bd]=await Promise.all([
+      getDoc(doc(db,'state','teamRankings')),getDoc(doc(db,'state','eggs')),
+      getDoc(doc(db,'state','bonus')),getDoc(doc(db,'state','playerHouses')),
+      getDoc(doc(db,'state','riddles')),
+      fsGetAll('archery'),fsGetAll('nail'),fsGetAll('duels'),fsGetAll('art'),fsGetAll('bestDressed'),
+    ]);
+    S.teamRankings=r.exists()?r.data():{};
+    S.eggs=e.exists()?e.data():{dragon:0,wolf:0,snake:0,lion:0};
+    S.bonus=b.exists()?b.data():{dragon:0,wolf:0,snake:0,lion:0};
+    S.playerHouses=h.exists()?h.data():{};
+    S.riddles=rd.exists()?rd.data():{};
+    S.archery=ar; S.nail=na; S.duels=du; S.art=art; S.bestDressed=bd;
+  } catch(e){ toast('Scrolls unreachable — check thy connection'); }
+  showLoading(false);
+}
+
+function startListeners(){
+  // ── REAL-TIME: Duels only (time sensitive) ──
+  onSnapshot(collection(db,'duels'),s=>{
+    S.duels=s.docs.map(d=>({id:d.id,...d.data()}));
+    if(currentView==='duel')renderDuels();
+    updateDuelBadge();
+  });
+
+  // ── ON VISIBILITY: Refresh all data when user returns to app ──
+  document.addEventListener('visibilitychange',()=>{
+    if(document.visibilityState==='visible') refreshAllData();
+  });
+
+  // ── POLL: Every 60s as backup (only if tab is visible) ──
+  setInterval(()=>{
+    if(document.visibilityState==='visible') refreshAllData();
+  }, 60000);
+}
+
+// Fetch all non-duel data in one batch — with cooldown to prevent read spam
+let lastRefresh = 0;
+const REFRESH_COOLDOWN = 20000; // 20 seconds minimum between refreshes
+async function refreshAllData(force){
+  const now = Date.now();
+  if(!force && (now - lastRefresh) < REFRESH_COOLDOWN) return;
+  lastRefresh = now;
+  try {
+    const [ar,na,art,bd,rankings,eggs,bonus,houses,ridst] = await Promise.all([
+      fsGetAll('archery'),
+      fsGetAll('nail'),
+      fsGetAll('art'),
+      fsGetAll('bestDressed'),
+      getDoc(doc(db,'state','teamRankings')),
+      getDoc(doc(db,'state','eggs')),
+      getDoc(doc(db,'state','bonus')),
+      getDoc(doc(db,'state','playerHouses')),
+      getDoc(doc(db,'state','riddles')),
+    ]);
+    S.archery=ar;
+    S.nail=na;
+    S.art=art;
+    S.bestDressed=bd;
+    if(rankings.exists()) S.teamRankings=rankings.data();
+    if(eggs.exists()) S.eggs=eggs.data();
+    if(bonus.exists()) S.bonus=bonus.data();
+    if(houses.exists()) S.playerHouses=houses.data();
+    if(ridst.exists()) S.riddles=ridst.data();
+
+    // Re-render current view
+    if(currentView==='scoreboard') renderScoreboard();
+    if(currentView==='archery') renderArcheryBoard();
+    if(currentView==='nail') renderNailBoard();
+    if(currentView==='art') renderArt();
+    if(currentView==='riddles') renderRiddles();
+    if(currentView==='personal'){
+      const name=document.getElementById('personal-name')?.value?.trim();
+      if(name) lookupPersonal();
+    }
+    if(adminUnlocked&&currentView==='maester') renderMaester();
+  } catch(e){ console.warn('Refresh error:',e); }
+}
+
+// ══ POINTS ══
+function housePoints(){
+  const pts={dragon:0,wolf:0,snake:0,lion:0};
+  TEAM_EVENTS.forEach(ev=>{ const r=S.teamRankings[ev.id]; if(!r)return; r.forEach((hid,i)=>{ if(hid&&pts[hid]!==undefined)pts[hid]+=RANK_PTS[i]; }); });
+  HOUSES.forEach(h=>{ const shots=S.archery.filter(a=>a.house===h.id); if(!shots.length)return; pts[h.id]+=Math.round(shots.reduce((s,a)=>s+a.score,0)/shots.length*10); });
+  HOUSES.forEach(h=>{ const en=S.nail.filter(n=>n.house===h.id); if(!en.length)return; pts[h.id]+=Math.round(en.reduce((s,n)=>s+Math.max(0,10-n.swings),0)/en.length*10); });
+  HOUSES.forEach(h=>{ pts[h.id]+=Math.min(30,(S.eggs[h.id]||0)*3); });
+  HOUSES.forEach(h=>{ pts[h.id]+=(S.bonus[h.id]||0); });
+  Object.values(S.riddles).forEach(rd=>{ if(rd.solved&&rd.winnerHouse&&pts[rd.winnerHouse]!==undefined)pts[rd.winnerHouse]+=RIDDLE_PTS; });
+  return pts;
+}
+
+function personalPoints(name){
+  const norm=normName(name);
+  let pts=STARTING_PTS;
+  const breakdown=[{label:'⚔ Starting Honour',pts:STARTING_PTS,detail:'All warriors begin with 5 pts'}];
+  const shots=S.archery.filter(a=>normName(a.name)===norm);
+  if(shots.length){const ap=shots.reduce((s,a)=>s+a.score,0);pts+=ap;breakdown.push({label:'🏹 Archery',pts:ap,detail:shots.length+' shot(s)'});}
+  const nails=S.nail.filter(n=>normName(n.name)===norm);
+  if(nails.length){const np=nails.reduce((s,n)=>s+Math.max(0,10-n.swings),0);pts+=np;breakdown.push({label:'🔨 Nail Log',pts:np,detail:nails.map(n=>n.swings+' swings').join(', ')});}
+  const myDuels=S.duels.filter(d=>d.status==='done'&&(normName(d.p1)===norm||normName(d.p2)===norm));
+  if(myDuels.length){const dp=myDuels.reduce((s,d)=>normName(d.winner)===norm?s+d.wager:s-d.wager,0);pts+=dp;breakdown.push({label:'⚔ Duels',pts:dp,detail:myDuels.filter(d=>normName(d.winner)===norm).length+'W / '+myDuels.filter(d=>normName(d.winner)!==norm).length+'L'});}
+  const rw=Object.values(S.riddles).filter(r=>r.solved&&normName(r.winnerName)===norm);
+  if(rw.length){pts+=rw.length*RIDDLE_PTS;breakdown.push({label:'🧠 Riddles',pts:rw.length*RIDDLE_PTS,detail:rw.length+' riddle(s) solved'});}
+  return {pts,breakdown,duels:S.duels.filter(d=>normName(d.p1)===norm||normName(d.p2)===norm)};
+}
+
+function houseSumPersonal(){
+  const sums={dragon:0,wolf:0,snake:0,lion:0};
+  const all={};
+  S.archery.forEach(a=>{if(!all[normName(a.name)])all[normName(a.name)]={name:a.name,house:a.house};});
+  S.nail.forEach(n=>{if(!all[normName(n.name)])all[normName(n.name)]={name:n.name,house:n.house};});
+  S.duels.filter(d=>d.status==='done').forEach(d=>{
+    if(!all[normName(d.p1)])all[normName(d.p1)]={name:d.p1,house:d.p1house};
+    if(!all[normName(d.p2)])all[normName(d.p2)]={name:d.p2,house:d.p2house};
+  });
+  Object.values(S.riddles).filter(r=>r.solved&&r.winnerHouse).forEach(r=>{if(!all[normName(r.winnerName)])all[normName(r.winnerName)]={name:r.winnerName,house:r.winnerHouse};});
+  Object.values(all).forEach(p=>{if(sums[p.house]!==undefined)sums[p.house]+=personalPoints(p.name).pts;});
+  return sums;
+}
+
+function individualLeaderboard(){
+  const all={};
+  S.archery.forEach(a=>{if(!all[normName(a.name)])all[normName(a.name)]={name:a.name,house:a.house};});
+  S.nail.forEach(n=>{if(!all[normName(n.name)])all[normName(n.name)]={name:n.name,house:n.house};});
+  S.duels.filter(d=>d.status==='done').forEach(d=>{
+    if(!all[normName(d.p1)])all[normName(d.p1)]={name:d.p1,house:d.p1house};
+    if(!all[normName(d.p2)])all[normName(d.p2)]={name:d.p2,house:d.p2house};
+  });
+  Object.values(S.riddles).filter(r=>r.solved).forEach(r=>{if(!all[normName(r.winnerName)])all[normName(r.winnerName)]={name:r.winnerName,house:r.winnerHouse};});
+  return Object.values(all).map(p=>({...p,pts:personalPoints(p.name).pts})).sort((a,b)=>b.pts-a.pts);
+}
+
+// ══ NAME TOOLS ══
+function normName(n){return String(n||'').toLowerCase().replace(/\s+/g,'').replace(/[^a-z0-9]/g,'');}
+function fuzzyMatch(input,list){
+  const ni=normName(input); if(!ni)return[];
+  return list.map(n=>{const nn=normName(n);if(nn===ni)return{n,s:100};if(nn.startsWith(ni)||ni.startsWith(nn))return{n,s:80};let ov=0;for(let i=0;i<Math.min(ni.length,nn.length);i++)if(ni[i]===nn[i])ov++;return{n,s:ov*10-Math.abs(ni.length-nn.length)*2};}).filter(x=>x.s>15).sort((a,b)=>b.s-a.s).slice(0,5).map(x=>x.n);
+}
+function setupNameInput(inputId,sugId,onPick){
+  const inp=document.getElementById(inputId);const sug=document.getElementById(sugId);if(!inp||!sug)return;
+  const ni=inp.cloneNode(true);inp.parentNode.replaceChild(ni,inp);
+  ni.addEventListener('input',()=>{
+    const m=fuzzyMatch(ni.value,GUESTS);
+    if(!ni.value||!m.length){sug.style.display='none';return;}
+    sug.innerHTML=m.map(n=>`<div data-n="${esc(n)}">${n}</div>`).join('');
+    sug.style.display='block';
+    sug.querySelectorAll('div').forEach(d=>d.addEventListener('click',()=>{ni.value=d.dataset.n;sug.style.display='none';if(onPick)onPick(d.dataset.n);}));
+  });
+}
+
+// ══ DUEL BADGE + ALERT ══
+function updateDuelBadge(){
+  const myName=getMyName();
+  const active=S.duels.filter(d=>d.status==='pending'||d.status==='awaiting');
+  const mine=myName?S.duels.filter(d=>d.status==='pending'&&normName(d.p2)===normName(myName)):[];
+  const badge=document.getElementById('duel-badge');
+  if(!badge)return;
+  const count=myName&&mine.length?mine.length:active.length;
+  badge.style.display=count>0?'flex':'none';
+  badge.textContent=count;
+}
+
+// ══ WELCOME BANNER ══
+function renderWelcome(){
+  const name=getMyName(); const house=getMyHouse();
+  const wb=document.getElementById('welcome-banner');
+  if(!wb)return;
+  if(!name){wb.style.display='none';return;}
+  const h=HOUSES.find(x=>x.id===house);
+  const pts=personalPoints(name).pts;
+  wb.style.display='flex';
+  document.getElementById('wb-crest').src=h?h.img:'';
+  document.getElementById('wb-crest').style.display=h?'block':'none';
+  document.getElementById('wb-name').textContent='Hail, '+name+'!';
+  document.getElementById('wb-sub').textContent=(h?'House '+h.name+' · ':'')+pts+' Honour Points';
+}
+
+// ══ CONFETTI ══
+function fireConfetti(){
+  const colors=['#c0392b','#2471a3','#1e8449','#b7770d','#e6a817','#f2e8d0'];
+  for(let i=0;i<80;i++){
+    const el=document.createElement('div');
+    el.className='confetti-piece';
+    const sz=5+Math.random()*9;
+    el.style.cssText=`left:${Math.random()*100}vw;background:${colors[Math.floor(Math.random()*colors.length)]};width:${sz}px;height:${sz}px;animation-duration:${1.8+Math.random()*2}s;animation-delay:${Math.random()*0.5}s;border-radius:${Math.random()>0.4?'50%':'2px'}`;
+    document.body.appendChild(el);
+    setTimeout(()=>el.remove(),4200);
+  }
+}
+
+// ══ ANIMATED COUNTER ══
+function animateCounter(elId, target, color){
+  const el=document.getElementById(elId); if(!el)return;
+  if(color)el.style.color=color;
+  let cur=0;
+  const iv=setInterval(()=>{cur+=Math.max(1,Math.ceil((target-cur)/6));if(cur>=target){cur=target;clearInterval(iv);}el.textContent=cur;},35);
+}
+
+// ══ PARCHMENT MODAL ══
+function showModal(title,body,confirmTxt,onConfirm,cancelTxt='Nay, Retreat'){
+  document.getElementById('modal-title').textContent=title;
+  document.getElementById('modal-body').textContent=body;
+  const cb=document.getElementById('modal-confirm');
+  cb.textContent=confirmTxt;
+  cb.onclick=()=>{hideModal();if(onConfirm)onConfirm();};
+  document.getElementById('modal-cancel').textContent=cancelTxt;
+  document.getElementById('modal-overlay').style.display='flex';
+}
+function hideModal(){ document.getElementById('modal-overlay').style.display='none'; }
+
+// ══ VIEWS ══
+function showView(v){
+  currentView=v;
+  document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(x=>x.classList.remove('active'));
+  const el=document.getElementById('view-'+v);if(el)el.classList.add('active');
+  const nb=document.getElementById('nav-'+v);if(nb)nb.classList.add('active');
+  renderWelcome();
+  // Refresh data on tab switch (cooldown prevents spam; duel is real-time, qr/maester don't need it)
+  if(!['duel','qr','maester'].includes(v)) refreshAllData();
+  if(v==='scoreboard')renderScoreboard();
+  if(v==='archery'){renderArcheryBoard();setupNameInput('arch-name','arch-sug',n=>{const h=S.playerHouses[normName(n)]||getMyHouse();if(h)setArchHouse(h);});}
+  if(v==='nail'){renderNailBoard();setupNameInput('nail-name','nail-sug',n=>{const h=S.playerHouses[normName(n)]||getMyHouse();if(h)setNailHouse(h);});}
+  if(v==='duel'){renderDuels();setupNameInput('duel-p1','duel-sug1',()=>{});setupNameInput('duel-p2','duel-sug2',()=>{});}
+  if(v==='personal'){setupNameInput('personal-name','personal-sug',()=>{});autoLoadPersonal();}
+  if(v==='art'){renderArt();setupNameInput('art-name','art-sug',n=>{const h=S.playerHouses[normName(n)]||getMyHouse();if(h)document.getElementById('art-house').value=h;});}
+  if(v==='riddles')renderRiddles();
+  if(v==='bestdressed'){renderBestDressed();setupNameInput('bd-name','bd-sug',()=>{});}
+  if(v==='qr')renderQRPage();
+  if(v==='maester'&&!adminUnlocked)showMaesterLogin();
+  if(v==='maester'&&adminUnlocked)renderMaester();
+}
+
+// ══ AUTO-FILL from device memory ══
+function autoFillName(inputId, houseSetFn){
+  const name=getMyName(); const house=getMyHouse();
+  const inp=document.getElementById(inputId);
+  if(inp&&name){inp.value=name;}
+  if(house&&houseSetFn)houseSetFn(house);
+}
+
+function autoLoadPersonal(){
+  const name=getMyName();
+  const inp=document.getElementById('personal-name');
+  if(inp&&name){inp.value=name;lookupPersonal();}
+}
+
+// ══ SCOREBOARD ══
+function renderScoreboard(){
+  const pts=housePoints();
+  const ranked=HOUSES.slice().sort((a,b)=>(pts[b.id]||0)-(pts[a.id]||0));
+  const ranks=['1st','2nd','3rd','4th'];
+  document.getElementById('sb-houses').innerHTML=ranked.map((h,i)=>`
+    <div class="house-card ${h.id}">
+      <img class="house-crest-img" src="${h.img}" alt="${h.name}" onerror="this.style.display='none'"/>
+      <div class="h-name">House ${h.name}</div>
+      <div class="h-pts" id="sbpts-${h.id}">${pts[h.id]||0}</div>
+      <div class="h-rank">${ranks[i]}</div>
+    </div>`).join('');
+
+  // Animate counters
+  ranked.forEach(h=>animateCounter('sbpts-'+h.id, pts[h.id]||0, h.color));
+
+  document.getElementById('sb-team-rows').innerHTML=TEAM_EVENTS.map(ev=>{
+    const r=S.teamRankings[ev.id];
+    const detail=r?r.map((hid,i)=>{const h=HOUSES.find(x=>x.id===hid);return h?`<span class="badge badge-${hid}">${h.emoji}${h.name}(${RANK_PTS[i]})</span>`:''}).join(' '):'';
+    return `<div class="event-row"><div><div class="ev-name">${ev.emoji} ${ev.name}</div><div style="margin-top:3px">${detail||'<span class="badge badge-none">Awaiting result</span>'}</div></div></div>`;
+  }).join('');
+
+  const sums=houseSumPersonal();
+  const sumRanked=HOUSES.slice().sort((a,b)=>(sums[b.id]||0)-(sums[a.id]||0));
+  document.getElementById('sb-personal-sums').innerHTML=sumRanked.map(h=>`
+    <div class="lb-row">
+      <div class="dot" style="background:${h.color};flex-shrink:0"></div>
+      <div class="lb-name" style="color:var(--ink) !important">${h.emoji} House ${h.name}</div>
+      <div class="lb-pts" style="color:${h.color}">${sums[h.id]||0} pts</div>
+    </div>`).join('');
+}
+
+// ══ ARCHERY ══
+let archSelHouse=null,archSelScore=null;
+function setArchHouse(h){archSelHouse=h;document.querySelectorAll('.arch-house-btn').forEach(b=>b.classList.remove('sel'));document.querySelectorAll(`.arch-house-btn.${h}`).forEach(b=>b.classList.add('sel'));}
+function setArchScore(s,btn){archSelScore=s;document.querySelectorAll('.arch-shot-btn').forEach(b=>b.classList.remove('sel'));btn.classList.add('sel');}
+
+async function submitArchery(){
+  if(submitting)return;submitting=true;
+  const btn=document.getElementById('arch-submit-btn');btn.disabled=true;
+  const name=document.getElementById('arch-name').value.trim();
+  if(!name){toast('Declare thy name!');submitting=false;btn.disabled=false;return;}
+  if(!archSelHouse){toast('Name thy house!');submitting=false;btn.disabled=false;return;}
+  if(!archSelScore){toast('Choose thy shot result');submitting=false;btn.disabled=false;return;}
+  if(S.archery.filter(a=>normName(a.name)===normName(name)).length>=2){toast('Thou hast already loosed thy 2 arrows!');submitting=false;btn.disabled=false;return;}
+  await fsSet('state/playerHouses',{[normName(name)]:archSelHouse});
+  await fsAdd('archery',{name,house:archSelHouse,score:archSelScore});
+  rememberMe(name,archSelHouse);
+  refreshAllData(true);
+  playSound('bow'); haptic(30);
+  if(archSelScore===3)fireConfetti();
+  const lbl=archSelScore===3?'BULLSEYE! 🎯':archSelScore===2?'First ring! ⭕':'Hit! 🏹';
+  showSuccess('arch',`${name} — ${lbl} — ${archSelScore} honour point(s) for House ${capFirst(archSelHouse)}!`);
+  archSelScore=null;archSelHouse=null;submitting=false;
+}
+
+function resetArch(){document.getElementById('arch-form').style.display='';document.getElementById('arch-success').style.display='none';document.getElementById('arch-submit-btn').disabled=false;archSelScore=null;archSelHouse=null;document.querySelectorAll('.arch-house-btn,.arch-shot-btn').forEach(b=>b.classList.remove('sel'));autoFillName('arch-name',h=>setArchHouse(h));}
+function renderArcheryBoard(){
+  autoFillName('arch-name',h=>setArchHouse(h));
+  const sorted=HOUSES.map(h=>({h,shots:S.archery.filter(a=>a.house===h.id)})).sort((a,b)=>{const aa=a.shots.length?a.shots.reduce((s,x)=>s+x.score,0)/a.shots.length:0;const bb=b.shots.length?b.shots.reduce((s,x)=>s+x.score,0)/b.shots.length:0;return bb-aa;});
+  document.getElementById('arch-board').innerHTML=sorted.map(({h,shots})=>{
+    if(!shots.length)return`<div class="lb-row"><div class="dot" style="background:${h.color}"></div><div class="lb-name">${h.emoji} House ${h.name}</div><span class="muted">No entries yet</span></div>`;
+    const avg=shots.reduce((s,a)=>s+a.score,0)/shots.length;
+    return`<div class="lb-row"><div class="dot" style="background:${h.color}"></div><div class="lb-name">${h.emoji} House ${h.name}<div class="lb-sub">${shots.length} shots · avg ${avg.toFixed(2)}</div></div><div class="lb-pts" style="color:${h.color}">${Math.round(avg*10)}pts</div></div>`;
+  }).join('');
+  const all=[...S.archery].sort((a,b)=>b.score-a.score);
+  document.getElementById('arch-solo-board').innerHTML=all.length===0?'<div class="muted" style="padding:12px 14px">No entries yet</div>':all.map((a,i)=>{const h=HOUSES.find(x=>x.id===a.house);const lbl=a.score===3?'🎯 Bullseye':a.score===2?'⭕ 1st Ring':'🏹 Hit';return`<div class="lb-row"><div class="lb-rank">${i+1}.</div><div class="dot" style="background:${h?.color||'#888'}"></div><div class="lb-name">${esc(a.name)}</div><div class="lb-pts" style="color:${h?.color||'#888'}">${lbl}</div></div>`;}).join('');
+}
+
+// ══ NAIL ══
+let nailSelHouse=null;
+function setNailHouse(h){nailSelHouse=h;document.querySelectorAll('.nail-house-btn').forEach(b=>b.classList.remove('sel'));document.querySelectorAll(`.nail-house-btn.${h}`).forEach(b=>b.classList.add('sel'));}
+
+async function submitNail(){
+  if(submitting)return;submitting=true;
+  const btn=document.getElementById('nail-submit-btn');btn.disabled=true;
+  const name=document.getElementById('nail-name').value.trim();
+  const swings=parseInt(document.getElementById('nail-swings').value);
+  if(!name){toast('Declare thy name!');submitting=false;btn.disabled=false;return;}
+  if(!nailSelHouse){toast('Name thy house!');submitting=false;btn.disabled=false;return;}
+  if(isNaN(swings)||swings<1){toast('Enter thy swing count');submitting=false;btn.disabled=false;return;}
+  if(S.nail.filter(n=>normName(n.name)===normName(name)).length>=2){toast('Thou hast already swung thy hammer twice!');submitting=false;btn.disabled=false;return;}
+  await fsSet('state/playerHouses',{[normName(name)]:nailSelHouse});
+  await fsAdd('nail',{name,house:nailSelHouse,swings});
+  rememberMe(name,nailSelHouse);
+  refreshAllData(true);
+  playSound('hammer'); haptic([50,10,20]);
+  if(swings<5)fireConfetti();
+  const pts=Math.max(0,10-swings);
+  showSuccess('nail',`${name} — ${swings} swings — ${pts} honour point(s) for House ${capFirst(nailSelHouse)}!${pts===0?' The nail hath resisted thee... 😬':''}`);
+  nailSelHouse=null;submitting=false;
+}
+
+function resetNail(){document.getElementById('nail-form').style.display='';document.getElementById('nail-success').style.display='none';document.getElementById('nail-name').value='';document.getElementById('nail-swings').value='';document.getElementById('nail-submit-btn').disabled=false;nailSelHouse=null;document.querySelectorAll('.nail-house-btn').forEach(b=>b.classList.remove('sel'));autoFillName('nail-name',h=>setNailHouse(h));}
+function renderNailBoard(){
+  autoFillName('nail-name',h=>setNailHouse(h));
+  const sorted=[...S.nail].sort((a,b)=>a.swings-b.swings);
+  document.getElementById('nail-board').innerHTML=sorted.length===0?'<div class="muted" style="padding:12px 14px">No entries yet, brave warriors</div>':sorted.slice(0,20).map((n,i)=>{const h=HOUSES.find(x=>x.id===n.house);return`<div class="lb-row"><div class="lb-rank">${i+1}.</div><div class="dot" style="background:${h?.color||'#888'}"></div><div class="lb-name">${esc(n.name)}</div><div class="lb-pts" style="color:${h?.color||'#888'}">${n.swings} swings · ${Math.max(0,10-n.swings)}pts</div></div>`;}).join('');
+}
+
+function showSuccess(type,txt){document.getElementById(type+'-form').style.display='none';document.getElementById(type+'-success').style.display='block';document.getElementById(type+'-success-txt').textContent=txt;}
+
+// ══ DUELS ══
+async function issueDuel(){
+  if(submitting)return;submitting=true;
+  const btn=document.getElementById('duel-issue-btn');btn.disabled=true;
+  const p1=document.getElementById('duel-p1').value.trim();
+  const p2=document.getElementById('duel-p2').value.trim();
+  const wager=parseInt(document.getElementById('duel-wager').value);
+  if(!p1||!p2){toast('Name both warriors!');submitting=false;btn.disabled=false;return;}
+  if(normName(p1)===normName(p2)){toast('One cannot duel oneself!');submitting=false;btn.disabled=false;return;}
+  if(isNaN(wager)||wager<1){toast('Set a worthy wager');submitting=false;btn.disabled=false;return;}
+  const p1pts=personalPoints(p1).pts;
+  if(wager>p1pts){toast(`${p1} hath not enough honour! (${p1pts} pts available)`);submitting=false;btn.disabled=false;return;}
+  const p1house=S.playerHouses[normName(p1)]||null;
+  const p2house=S.playerHouses[normName(p2)]||null;
+  await fsAdd('duels',{p1,p2,p1house,p2house,wager,status:'pending',winner:null});
+  playSound('sword'); haptic([20,10,20,10,15]);
+  document.getElementById('duel-p1').value=''; document.getElementById('duel-p2').value=''; document.getElementById('duel-wager').value='';
+  toast('Challenge issued! Await thy opponent ⚔');
+  submitting=false;btn.disabled=false;
+}
+
+async function confirmDuel(id){
+  const duel=S.duels.find(d=>d.id===id);if(!duel)return;
+  const inp=document.getElementById('confirm-inp-'+id);if(!inp)return;
+  if(normName(inp.value)!==normName(duel.p2)){toast(`Only ${duel.p2} may confirm!`);return;}
+  const p2pts=personalPoints(duel.p2).pts;
+  if(duel.wager>p2pts){toast(`${duel.p2} hath not enough honour! (${p2pts} pts)`);return;}
+  await setDoc(doc(db,'duels',id),{status:'awaiting'},{merge:true});
+  playSound('sword'); haptic([20,10,20]);
+  toast('Duel confirmed! Now fight! ⚔');
+}
+
+async function declineDuel(id){
+  const duel=S.duels.find(d=>d.id===id);if(!duel)return;
+  const inp=document.getElementById('confirm-inp-'+id);if(!inp)return;
+  if(normName(inp.value)!==normName(duel.p2)){toast(`Only ${duel.p2} may decline!`);return;}
+  await setDoc(doc(db,'duels',id),{status:'declined'},{merge:true});
+  toast('Duel declined — cowardice noted 🐔');
+}
+
+async function claimDuel(id,winner){
+  await setDoc(doc(db,'duels',id),{status:'done',winner},{merge:true});
+  playSound('sword'); haptic([30,10,30,10,50]);
+  fireConfetti();
+  toast(winner+' claims victory! ⚔');
+}
+
+function renderDuels(){
+  autoFillName('duel-p1',null);
+  const pending=S.duels.filter(d=>d.status==='pending');
+  const awaiting=S.duels.filter(d=>d.status==='awaiting');
+  const done=S.duels.filter(d=>d.status==='done').slice().reverse();
+  const declined=S.duels.filter(d=>d.status==='declined').slice().reverse();
+
+  document.getElementById('pending-duels').innerHTML=[...pending,...awaiting].length===0?'<div class="muted" style="padding:16px;text-align:center">No duels await thy courage</div>':[...pending,...awaiting].map(d=>{
+    if(d.status==='awaiting')return`<div class="duel-item"><div style="font-weight:600;font-size:14px;color:var(--ink)">${esc(d.p1)} <span style="color:#e6a817">⚔</span> ${esc(d.p2)}</div><div class="muted" style="font-size:11px;margin:2px 0">Wager: ${d.wager} pts · Confirmed — claim thy victor!</div><div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap"><button class="btn-sm" onclick="claimDuel('${d.id}','${esc(d.p1)}')">${esc(d.p1)} won ⚔</button><button class="btn-sm" onclick="claimDuel('${d.id}','${esc(d.p2)}')">${esc(d.p2)} won ⚔</button></div></div>`;
+    return`<div class="duel-item"><div style="font-weight:600;font-size:14px;color:var(--ink)">${esc(d.p1)} <span style="color:#e6a817">⚔</span> ${esc(d.p2)}</div><div class="muted" style="font-size:11px;margin:2px 0">Wager: ${d.wager} pts · ${esc(d.p2)} must confirm or decline</div><div style="margin-top:8px;padding:8px;background:rgba(139,105,20,0.1);border-radius:3px"><div style="font-size:10px;font-family:'Cinzel',serif;color:var(--ink-light);margin-bottom:5px">ART THOU ${esc(d.p2).toUpperCase()}? SPEAK THY NAME:</div><div style="display:flex;gap:5px;flex-wrap:wrap"><input class="form-input" style="font-size:14px;padding:7px 10px;flex:1;min-width:120px" type="text" id="confirm-inp-${d.id}" placeholder="${esc(d.p2)}'s name..."/><button class="btn-sm" onclick="confirmDuel('${d.id}')">Accept ⚔</button><button class="btn-sm" style="background:#2a0505;border-color:#c0392b;color:#e74c3c" onclick="declineDuel('${d.id}')">Decline 🐔</button></div></div></div>`;
+  }).join('');
+
+  document.getElementById('duel-history').innerHTML=([...done,...declined]).length===0?'<div class="muted" style="padding:14px;text-align:center">No battles fought yet</div>':[...done,...declined].slice(0,20).map(d=>`<div class="lb-row"><div class="lb-name" style="color:var(--ink)">${esc(d.p1)} vs ${esc(d.p2)}<div class="lb-sub">${d.status==='done'?'Victor: '+esc(d.winner)+' · '+d.wager+' pts':'Declined 🐔'}</div></div><div style="font-size:16px">${d.status==='done'?'✅':'🐔'}</div></div>`).join('');
+}
+
+// ══ PERSONAL ══
+async function lookupPersonal(){
+  const name=document.getElementById('personal-name').value.trim();
+  if(!name){toast('Enter thy name, warrior');return;}
+  const res=personalPoints(name);
+  const h=S.playerHouses[normName(name)];
+  const house=HOUSES.find(x=>x.id===h);
+  document.getElementById('personal-result').style.display='';
+  document.getElementById('personal-name-title').textContent='⚔ '+name+' ⚔';
+  const pv=document.getElementById('personal-pts-val');
+  pv.textContent='0'; animateCounter('personal-pts-val',res.pts,house?house.color:'var(--ink)');
+  const pb=document.getElementById('personal-house-badge');
+  if(house){pb.textContent=house.emoji+' House '+house.name;pb.style.background=house.color;pb.style.color='#fff';}
+  else{pb.textContent='House unknown';pb.style.background='rgba(139,105,20,0.2)';pb.style.color='var(--ink-light)';}
+  document.getElementById('personal-breakdown').innerHTML=res.breakdown.map(b=>`<div class="lb-row"><div class="lb-name">${b.label}<div class="lb-sub">${b.detail}</div></div><div class="lb-pts">${b.pts>=0?'+':''}${b.pts}</div></div>`).join('');
+  document.getElementById('personal-duels').innerHTML=res.duels.length===0?'<div class="muted" style="padding:10px 14px">No duels fought yet</div>':res.duels.map(d=>{const opp=normName(d.p1)===normName(name)?d.p2:d.p1;const won=d.status==='done'&&normName(d.winner)===normName(name);const pend=d.status!=='done';return`<div class="lb-row"><div class="lb-name">${pend?'⏳':'⚔'} vs ${esc(opp)}<div class="lb-sub">Wager: ${d.wager}pts · ${pend?'Pending':won?'Victory! ✅':'Defeated ❌'}</div></div><div class="lb-pts" style="color:${won?'#1e8449':pend?'#b7770d':'#c0392b'}">${won?'+'+d.wager:pend?'?':'-'+d.wager}</div></div>`;}).join('');
+}
+
+// ══ ART ══
+let artFileData=null;
+window.handleArtFile=function(inp){const f=inp.files[0];if(!f)return;artFileData=f;document.getElementById('art-status').textContent='✅ '+f.name+' ready to submit';};
+
+function compressImage(file,mw=800,q=0.72){
+  return new Promise(resolve=>{
+    const r=new FileReader();
+    r.onload=e=>{const img=new Image();img.onload=()=>{const c=document.createElement('canvas');let w=img.width,h=img.height;if(w>mw){h=Math.round(h*mw/w);w=mw;}c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);resolve(c.toDataURL('image/jpeg',q));};img.src=e.target.result;};
+    r.readAsDataURL(file);
+  });
+}
+
+function getDeviceId(){return DID;}
+
+async function submitArt(){
+  if(submitting)return;submitting=true;
+  const btn=document.getElementById('art-submit-btn');btn.disabled=true;
+  const name=document.getElementById('art-name').value.trim();
+  const house=document.getElementById('art-house').value;
+  if(!name){toast('Enter thy name!');submitting=false;btn.disabled=false;return;}
+  if(!artFileData){toast('Capture thy masterpiece first!');submitting=false;btn.disabled=false;return;}
+  document.getElementById('art-status').textContent='Preparing thy masterpiece...';
+  const b64=await compressImage(artFileData);
+  const kb=Math.round(b64.length*0.75/1024);
+  document.getElementById('art-status').textContent=`Submitting... (${kb}KB)`;
+  try{
+    await fsAdd('art',{image:b64,submitterName:name,submitterHouse:house,votes:{},totalScore:0,voteCount:0});
+    rememberMe(name,house);
+    document.getElementById('art-status').textContent='';
+    document.getElementById('art-form').style.display='none';
+    document.getElementById('art-success').style.display='block';
+    submitting=false;
+  }catch(e){document.getElementById('art-status').textContent='Error: '+e.message;submitting=false;btn.disabled=false;}
+}
+
+function resetArt(){document.getElementById('art-form').style.display='';document.getElementById('art-success').style.display='none';document.getElementById('art-status').textContent='';document.getElementById('art-submit-btn').disabled=false;artFileData=null;autoFillName('art-name',null);}
+
+async function rateArt(artId,stars){
+  const did=getDeviceId();const art=S.art.find(a=>a.id===artId);if(!art)return;
+  const votes={...(art.votes||{}),[did]:stars};
+  const scores=Object.values(votes);
+  await setDoc(doc(db,'art',artId),{votes,totalScore:scores.reduce((s,v)=>s+v,0),voteCount:scores.length},{merge:true});
+  toast('Thy judgement hath been recorded! ⭐');renderArt();
+}
+
+function renderArt(){
+  const gallery=document.getElementById('art-gallery');if(!gallery)return;
+  if(!S.art.length){gallery.innerHTML='<div class="muted" style="padding:20px;text-align:center">No masterpieces submitted yet — be the first!</div>';return;}
+  const did=getDeviceId();
+  gallery.innerHTML=S.art.map(a=>{
+    const myVote=(a.votes||{})[did]||0;
+    const avg=a.voteCount>0?(a.totalScore/a.voteCount).toFixed(1):'-';
+    return`<div style="margin-bottom:14px;border:2px solid var(--border);border-radius:4px;overflow:hidden;background:#f5e6bf">
+      <img src="${a.image}" style="width:100%;display:block;max-height:300px;object-fit:cover"/>
+      <div style="padding:10px 12px;background:#f5e6bf">
+        <div style="font-family:'Cinzel',serif;font-size:11px;color:#3d2b0e;margin-bottom:6px">Anonymous Submission · ${a.voteCount||0} votes · Avg: ${avg} ⭐</div>
+        <div style="display:flex;gap:4px;justify-content:center">
+          ${[1,2,3,4,5].map(s=>`<button onclick="rateArt('${a.id}',${s})" style="font-size:24px;background:none;border:none;cursor:pointer;opacity:${myVote>=s?'1':'0.2'};padding:4px;transition:opacity 0.2s">⭐</button>`).join('')}
+        </div>
+        ${myVote?`<div style="text-align:center;font-size:12px;font-style:italic;color:#3d2b0e;margin-top:4px">Thy rating: ${myVote} star${myVote>1?'s':''}</div>`:'<div style="text-align:center;font-size:11px;font-style:italic;color:#7a5510;margin-top:4px">Tap a star to cast thy judgement</div>'}
+      </div></div>`;
+  }).join('');
+}
+
+// ══ RIDDLES ══
+function renderRiddles(){
+  const el=document.getElementById('riddle-list');if(!el)return;
+  el.innerHTML=RIDDLES.map(r=>{
+    const rd=S.riddles[r.id]||{};
+    if(!rd.released)return`<div class="parchment riddle-card locked"><div class="riddle-lock">🔒</div><div class="riddle-num">Sealed by the Grand Maester</div></div>`;
+    if(rd.solved)return`<div class="parchment riddle-card solved"><div class="riddle-num">Solved! ✅</div><div class="riddle-q">${r.q}</div><div style="margin-top:8px;padding:8px;background:rgba(30,132,73,0.1);border-radius:3px;font-family:'Cinzel',serif;font-size:11px;color:#1e8449">Winner: ${esc(rd.winnerName)} · ${rd.winnerHouse?capFirst(rd.winnerHouse):''} · ${RIDDLE_PTS} pts awarded</div></div>`;
+    return`<div class="parchment riddle-card">
+      <div class="riddle-num">Riddle the ${['First','Second','Third','Fourth','Fifth','Sixth','Seventh','Eighth','Ninth','Tenth'][RIDDLES.indexOf(r)]||''}</div>
+      <div class="riddle-q">${r.q}</div>
+      ${rd.hintRevealed?`<div class="riddle-hint">💡 ${r.hint}</div>`:'<div class="riddle-hint-locked">Hint sealed — await the Maester\'s mercy</div>'}
+      <div style="margin-top:10px">
+        <div style="display:flex;gap:6px;margin-bottom:8px">
+          <input class="form-input" type="text" id="riddle-ans-${r.id}" placeholder="Speak thy answer..." style="flex:1;font-size:15px;padding:8px 10px"/>
+          <button class="btn-sm" onclick="submitRiddleAnswer('${r.id}')">Submit</button>
+        </div>
+        <div class="input-wrap" style="margin-bottom:6px">
+          <input class="form-input" type="text" id="riddle-name-${r.id}" placeholder="Thy name..." style="font-size:15px;padding:8px 10px" oninput="riddleNameInput('${r.id}',this.value)"/>
+          <div class="suggestions" id="riddle-sug-${r.id}" style="display:none"></div>
+        </div>
+        <select class="form-input" id="riddle-house-${r.id}" style="font-size:14px;padding:8px 10px">
+          <option value="">-- Thy House --</option>
+          ${HOUSES.map(h=>`<option value="${h.id}">${h.emoji} House ${h.name}</option>`).join('')}
+        </select>
+      </div></div>`;
+  }).join('');
+  // Auto-fill riddle inputs
+  const myName=getMyName();const myHouse=getMyHouse();
+  RIDDLES.forEach(r=>{
+    const ni=document.getElementById('riddle-name-'+r.id);
+    const hi=document.getElementById('riddle-house-'+r.id);
+    if(ni&&myName)ni.value=myName;
+    if(hi&&myHouse)hi.value=myHouse;
+  });
+}
+
+function riddleNameInput(rid,val){
+  const sug=document.getElementById('riddle-sug-'+rid);
+  const m=fuzzyMatch(val,GUESTS);
+  if(!val||!m.length){sug.style.display='none';return;}
+  sug.innerHTML=m.map(n=>`<div data-n="${esc(n)}">${n}</div>`).join('');
+  sug.style.display='block';
+  sug.querySelectorAll('div').forEach(d=>d.addEventListener('click',()=>{document.getElementById('riddle-name-'+rid).value=d.dataset.n;sug.style.display='none';const h=S.playerHouses[normName(d.dataset.n)];if(h)document.getElementById('riddle-house-'+rid).value=h;}));
+}
+
+async function submitRiddleAnswer(rid){
+  const r=RIDDLES.find(x=>x.id===rid);if(!r)return;
+  const ans=document.getElementById('riddle-ans-'+rid).value.trim().toLowerCase();
+  const name=document.getElementById('riddle-name-'+rid).value.trim();
+  const house=document.getElementById('riddle-house-'+rid).value;
+  if(!ans){toast('Speak thy answer!');return;}
+  if(!name){toast('Enter thy name!');return;}
+  if(!house){toast('Declare thy house!');return;}
+  if((S.riddles[rid]||{}).solved){toast('This riddle hath already been solved!');return;}
+  const correct=r.keys.some(k=>ans.includes(k.toLowerCase()));
+  if(!correct){toast('Thy answer is incorrect, mortal! Try again.');haptic([10,10,10]);return;}
+  await fsSet('state/riddles',{[rid]:{...(S.riddles[rid]||{}),released:true,solved:true,winnerName:name,winnerHouse:house}});
+  await fsSet('state/playerHouses',{[normName(name)]:house});
+  rememberMe(name,house);
+  fireConfetti(); playSound('sword'); haptic([30,10,30,10,60]);
+  toast(`CORRECT! ${name} solves the riddle! ${RIDDLE_PTS} pts for House ${capFirst(house)}! 🏆`);
+}
+
+// ══ QR PAGE ══
+function renderQRPage(){
+  const base=window.location.href.split('?')[0].split('#')[0];
+  const stations=[
+    {label:'⚔ Standings',      desc:'Live house standings',        param:'view=scoreboard'},
+    {label:'👤 My Honour',     desc:'Check thy personal honour',   param:'view=personal'},
+    {label:'⚔ Duel Station',  desc:'Challenge a fellow warrior',  param:'view=duel'},
+    {label:'🏹 Archery Range', desc:'Submit thy shot result',      param:'view=archery'},
+    {label:'🔨 Nail Into Log', desc:'Record thy swing count',      param:'view=nail'},
+    {label:'🎨 Art Challenge', desc:'Submit thy masterpiece',      param:'view=art'},
+    {label:'🧠 Trials of Mind',desc:'Test thy wits',              param:'view=riddles'},
+    {label:'👑 Best Dressed',  desc:'Cast thy vote',               param:'view=bestdressed'},
+  ];
+  const grid=document.getElementById('qr-page-grid');
+  if(!grid)return;
+  grid.innerHTML='';
+  stations.forEach((s,i)=>{
+    const url=base+'?'+s.param;
+    const sid='qrp'+i;
+    const card=document.createElement('div');
+    card.className='parchment qr-card';
+    card.innerHTML=`<h3>${s.label}</h3><p>${s.desc}</p><div class="qr-wrap" id="${sid}"></div>`;
+    grid.appendChild(card);
+  });
+  setTimeout(()=>{
+    stations.forEach((s,i)=>{
+      const url=base+'?'+s.param;
+      const el=document.getElementById('qrp'+i);
+      if(!el||el.children.length>0)return;
+      try{
+        new window.QRCode(el,{text:url,width:110,height:110,colorDark:'#1a1208',colorLight:'#f2e8d0',correctLevel:window.QRCode.CorrectLevel.M});
+      }catch(e){console.warn('QR error',e);}
+    });
+  },100);
+}
+
+// ══ COLLAPSIBLE SECTIONS ══
+function toggleSection(id){
+  const body=document.getElementById(id);
+  const header=body?.previousElementSibling;
+  if(!body||!header)return;
+  body.classList.toggle('open');
+  header.classList.toggle('open');
+}
+window.toggleSection=toggleSection;
+
+// ══ BEST DRESSED ══
+async function submitBestDressedVote(){
+  if(submitting)return; submitting=true;
+  const btn=document.getElementById('bd-submit-btn'); btn.disabled=true;
+  const name=document.getElementById('bd-name').value.trim();
+  if(!name){toast('Name a warrior!');submitting=false;btn.disabled=false;return;}
+  // One vote per device
+  const did=getDeviceId();
+  const existing=S.bestDressed?S.bestDressed.find(v=>v.deviceId===did):null;
+  if(existing){toast('Thou hast already cast thy vote!');submitting=false;btn.disabled=false;return;}
+  await fsAdd('bestDressed',{name,deviceId:did});
+  rememberMe(getMyName()||name, getMyHouse());
+  document.getElementById('bd-form').style.display='none';
+  document.getElementById('bd-success').style.display='block';
+  submitting=false;
+}
+
+function resetBestDressed(){
+  document.getElementById('bd-form').style.display='';
+  document.getElementById('bd-success').style.display='none';
+  document.getElementById('bd-submit-btn').disabled=false;
+  document.getElementById('bd-name').value='';
+}
+
+function renderBestDressed(){
+  // Just show the submission form — results hidden
+  const did=getDeviceId();
+  const myVote=S.bestDressed?S.bestDressed.find(v=>v.deviceId===did):null;
+  if(myVote){
+    document.getElementById('bd-form').style.display='none';
+    document.getElementById('bd-success').style.display='block';
+    document.getElementById('bd-voted-name').textContent=myVote.name;
+  }
+}
+
+// ══ MAESTER ══
+function showMaesterLogin(){document.getElementById('maester-login').style.display='';document.getElementById('maester-panel').style.display='none';}
+function maesterLogin(){
+  if(document.getElementById('maester-pw').value===ADMIN_PW){adminUnlocked=true;document.getElementById('maester-login').style.display='none';document.getElementById('maester-panel').style.display='';renderMaester();}
+  else{toast('The password is incorrect, impostor!');}
+}
+
+function renderMaester(){
+  document.getElementById('maester-team').innerHTML=TEAM_EVENTS.map(ev=>{
+    const ranking=S.teamRankings[ev.id]||[null,null,null,null];
+    return`<div class="admin-row"><div class="admin-ename">${ev.emoji} ${ev.name}</div>
+    <div class="rank-legend"><span>1st=30</span><span>2nd=20</span><span>3rd=10</span><span>4th=0</span></div>
+    ${[0,1,2,3].map(p=>`<div style="display:flex;align-items:center;gap:5px;margin-bottom:4px"><span style="font-family:'Cinzel',serif;font-size:10px;font-weight:700;color:var(--border);width:26px">${p+1}${['st','nd','rd','th'][p]}</span><div class="house-btn-row">${HOUSES.map(h=>`<button class="hbtn ${h.id} ${ranking[p]===h.id?'sel':''}" onclick="setRank('${ev.id}',${p},'${h.id}')">${h.emoji} ${h.name}</button>`).join('')}</div></div>`).join('')}</div>`;
+  }).join('');
+  document.getElementById('maester-egg-totals').textContent=HOUSES.map(h=>`${h.emoji} ${S.eggs[h.id]||0} eggs (${Math.min(30,(S.eggs[h.id]||0)*3)}pts)`).join(' · ');
+  const lb=individualLeaderboard();
+  document.getElementById('maester-indiv').innerHTML=lb.length===0?'<div class="muted" style="padding:14px;text-align:center">No individual scores yet</div>':lb.slice(0,30).map((p,i)=>{const h=HOUSES.find(x=>x.id===p.house);return`<div class="lb-row"><div class="lb-rank">${i+1}.</div>${h?`<div class="dot" style="background:${h.color}"></div>`:''}<div class="lb-name">${esc(p.name)}</div><div class="lb-pts" style="color:${h?.color||'var(--ink)'}">${p.pts}</div></div>`;}).join('');
+  document.getElementById('maester-arch').innerHTML=S.archery.length===0?'<div class="muted" style="padding:10px 14px">No entries</div>':S.archery.map(a=>`<div class="lb-row"><div class="lb-name">${esc(a.name)}<div class="lb-sub">${capFirst(a.house)} · ${a.score===3?'Bullseye':a.score===2?'1st Ring':'Hit'}</div></div><button class="btn-del" onclick="delEntry('archery','${a.id}')">✕</button></div>`).join('');
+  document.getElementById('maester-nail').innerHTML=S.nail.length===0?'<div class="muted" style="padding:10px 14px">No entries</div>':S.nail.map(n=>`<div class="lb-row"><div class="lb-name">${esc(n.name)}<div class="lb-sub">${capFirst(n.house)} · ${n.swings} swings · ${Math.max(0,10-n.swings)}pts</div></div><button class="btn-del" onclick="delEntry('nail','${n.id}')">✕</button></div>`).join('');
+  document.getElementById('maester-duels').innerHTML=S.duels.length===0?'<div class="muted" style="padding:10px 14px">No duels</div>':S.duels.slice().reverse().map(d=>`<div class="lb-row"><div class="lb-name">${esc(d.p1)} vs ${esc(d.p2)}<div class="lb-sub">Wager: ${d.wager}pts · ${d.status}${d.winner?' · Winner: '+esc(d.winner):''}</div></div><button class="btn-del" onclick="delEntry('duels','${d.id}')">✕</button></div>`).join('');
+  document.getElementById('maester-riddles').innerHTML=RIDDLES.map(r=>{const rd=S.riddles[r.id]||{};return`<div class="admin-row"><div class="admin-ename" style="font-size:11px;margin-bottom:4px">${r.q.slice(0,55)}...</div><div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center"><button class="btn-sm ${rd.released?'':'btn-green'}" onclick="toggleRiddle('${r.id}',${!rd.released})">${rd.released?'🔒 Lock':'🔓 Release'}</button><button class="btn-sm" onclick="toggleHint('${r.id}',${!rd.hintRevealed})">${rd.hintRevealed?'Hide Hint':'💡 Hint'}</button>${rd.solved?`<span class="muted" style="font-size:11px">✅ ${esc(rd.winnerName)}</span>`:'<span class="muted" style="font-size:11px">Unsolved</span>'}</div></div>`;}).join('');
+  // Best dressed results
+  const bdTally={};
+  (S.bestDressed||[]).forEach(v=>{ if(v.name) bdTally[v.name]=(bdTally[v.name]||0)+1; });
+  const bdSorted=Object.entries(bdTally).sort((a,b)=>b[1]-a[1]);
+  const bdEl=document.getElementById('maester-bestdressed');
+  if(bdEl) bdEl.innerHTML=bdSorted.length===0
+    ?'<div class="muted" style="padding:14px;text-align:center">No votes yet — the realm has not spoken</div>'
+    :bdSorted.map(([name,votes],i)=>`<div class="lb-row"><div class="lb-rank">${i+1}.</div><div class="lb-name" style="color:var(--ink)">${esc(name)}</div><div class="lb-pts" style="color:${i===0?'var(--lion)':'var(--ink)'}">${votes} vote${votes>1?'s':''}${i===0?' 👑':''}</div></div>`).join('');
+
+  document.getElementById('maester-art').innerHTML=S.art.length===0?'<div class="muted" style="padding:14px;text-align:center">No submissions yet</div>':S.art.map((a,i)=>{const avg=a.voteCount>0?(a.totalScore/a.voteCount).toFixed(2):'-';return`<div style="margin-bottom:12px;border:2px solid var(--border);border-radius:4px;overflow:hidden;background:var(--parchment)"><img src="${a.image}" style="width:100%;display:block;max-height:180px;object-fit:cover"/><div style="padding:8px 12px"><div style="font-weight:600;color:var(--ink);font-size:14px">#${i+1} — ${esc(a.submitterName)} · ${capFirst(a.submitterHouse||'?')}</div><div class="muted" style="font-size:11px">${a.voteCount||0} votes · Avg: ${avg} ⭐ · Scores: ${Object.values(a.votes||{}).join(', ')||'none'}</div><button class="btn-del" style="margin-top:6px" onclick="delEntry('art','${a.id}')">✕ Remove</button></div></div>`;}).join('');
+}
+
+async function setRank(eid,p,hid){const r=[...(S.teamRankings[eid]||[null,null,null,null])];const ex=r.indexOf(hid);if(ex!==-1)r[ex]=null;r[p]=r[p]===hid?null:hid;S.teamRankings[eid]=r;await fsSet('state/teamRankings',{[eid]:r});renderMaester();}
+async function addEggs(){const h=document.getElementById('egg-house').value;const n=parseInt(document.getElementById('egg-count').value);if(isNaN(n)||n<1){toast('Enter egg count');return;}S.eggs[h]=(S.eggs[h]||0)+n;await fsSet('state/eggs',{[h]:S.eggs[h]});toast(`+${n} egg(s) for House ${capFirst(h)}! 🥚`);renderMaester();refreshAllData(true);}
+async function addBonus(){const h=document.getElementById('bonus-house').value;const p=parseInt(document.getElementById('bonus-pts').value);if(isNaN(p)){toast('Enter points');return;}S.bonus[h]=(S.bonus[h]||0)+p;await fsSet('state/bonus',{[h]:S.bonus[h]});toast(`${p>0?'+':''}${p} pts to House ${capFirst(h)}`);}
+async function delEntry(col,id){showModal('Remove Entry','Art thou certain this entry should be struck from the scrolls?','Remove It',async()=>{await fsDel(col,id);toast('Entry struck from the record');if(adminUnlocked)renderMaester();});}
+async function toggleRiddle(rid,val){await fsSet('state/riddles',{[rid]:{...(S.riddles[rid]||{}),released:val}});renderMaester();toast(val?'Riddle released to the realm!':'Riddle sealed');}
+async function toggleHint(rid,val){await fsSet('state/riddles',{[rid]:{...(S.riddles[rid]||{}),hintRevealed:val}});renderMaester();renderRiddles();toast(val?'Hint revealed!':'Hint hidden');}
+async function confirmReset(){showModal('Reset Tournament','This will wipe ALL scrolls — every score, duel and entry — for eternity. Art thou absolutely certain?','Wipe the Scrolls',async()=>{const cols=['archery','nail','duels','art'];for(const col of cols){const s=await getDocs(collection(db,col));for(const d of s.docs)await deleteDoc(d.ref);}await setDoc(doc(db,'state','teamRankings'),{});await setDoc(doc(db,'state','eggs'),{dragon:0,wolf:0,snake:0,lion:0});await setDoc(doc(db,'state','bonus'),{dragon:0,wolf:0,snake:0,lion:0});await setDoc(doc(db,'state','playerHouses'),{});await setDoc(doc(db,'state','riddles'),{});toast('The scrolls have been wiped clean');renderMaester();});}
+
+// ══ PUBLIC QR PAGE ══
+
+
+
+// ══ UTILS ══
+function showLoading(on){document.getElementById('loading').style.display=on?'flex':'none';}
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),3200);}
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function capFirst(s){return s?s[0].toUpperCase()+s.slice(1):s;}
+
+function handleParams(){const p=new URLSearchParams(window.location.search);const v=p.get('view');if(v)showView(v);}
+
+// ══ EXPOSE ══
+window.showView=showView;
+window.setArchHouse=setArchHouse;window.setArchScore=setArchScore;window.submitArchery=submitArchery;window.resetArch=resetArch;
+window.setNailHouse=setNailHouse;window.submitNail=submitNail;window.resetNail=resetNail;
+window.issueDuel=issueDuel;window.confirmDuel=confirmDuel;window.declineDuel=declineDuel;window.claimDuel=claimDuel;
+window.lookupPersonal=lookupPersonal;
+window.submitArt=submitArt;window.resetArt=resetArt;window.rateArt=rateArt;
+window.renderRiddles=renderRiddles;window.submitRiddleAnswer=submitRiddleAnswer;window.riddleNameInput=riddleNameInput;
+window.submitBestDressedVote=submitBestDressedVote; window.resetBestDressed=resetBestDressed;
+window.maesterLogin=maesterLogin;window.setRank=setRank;window.addEggs=addEggs;window.addBonus=addBonus;window.delEntry=delEntry;window.toggleRiddle=toggleRiddle;window.toggleHint=toggleHint;window.confirmReset=confirmReset;
+window.hideModal=hideModal;
+
+await loadAll();
+startListeners();
+renderWelcome();
+updateDuelBadge();
+handleParams();
+if(currentView==='scoreboard')renderScoreboard();
+
+
+document.addEventListener('click',e=>{if(!e.target.closest('.input-wrap'))document.querySelectorAll('.suggestions').forEach(s=>s.style.display='none');});
+</script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@400;700;900&family=Cinzel:wght@400;700;900&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap');
+:root{--parchment:#f2e6c0;--parchment-dark:#e0d09a;--ink:#1c0f05;--ink-light:#3d2b0e;--dragon:#c0392b;--wolf:#2471a3;--snake:#1e8449;--lion:#b7770d;--border:#7a5510;--gold:#c8941a;--gold2:#e6b830;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Crimson Text',Georgia,serif;background:#0d0703;min-height:100vh;color:var(--ink);padding-bottom:30px;overflow-x:hidden;}
+.view{display:none;}.view.active{display:block;}
+
+/* ── TORCH BG ── */
+.bg{position:fixed;inset:0;background:radial-gradient(ellipse at 15% 5%,rgba(160,70,5,0.22) 0%,transparent 40%),radial-gradient(ellipse at 85% 5%,rgba(140,55,5,0.18) 0%,transparent 40%),radial-gradient(ellipse at 50% 100%,rgba(60,20,3,0.4) 0%,transparent 50%),#0d0703;animation:bgFlicker 5s ease-in-out infinite alternate;z-index:0;}
+@keyframes bgFlicker{0%{filter:brightness(0.88);}30%{filter:brightness(1.06);}60%{filter:brightness(0.92);}100%{filter:brightness(1);}}
+.torch{position:fixed;top:2px;font-size:28px;z-index:10;animation:tflame 2.5s ease-in-out infinite alternate;}
+.torch-l{left:10px;}.torch-r{right:10px;}
+@keyframes tflame{0%{filter:drop-shadow(0 0 6px rgba(255,140,0,0.7));transform:scaleY(1);}50%{filter:drop-shadow(0 0 16px rgba(255,100,0,1));transform:scaleY(1.07) scaleX(0.95);}100%{filter:drop-shadow(0 0 9px rgba(255,170,0,0.85));transform:scaleY(0.96);}}
+
+/* ── SVG FILTERS ── */
+.svg-filters{position:absolute;width:0;height:0;overflow:hidden;}
+
+/* ── NAV ── */
+nav{position:sticky;top:0;z-index:100;background:linear-gradient(180deg,#0d0703,#180a02);border-bottom:2px solid var(--gold);padding:8px 8px 6px;display:flex;gap:4px;flex-wrap:wrap;justify-content:center;box-shadow:0 3px 20px rgba(0,0,0,0.8);}
+.nav-btn{font-family:'Cinzel',serif;font-size:9px;font-weight:700;letter-spacing:0.05em;padding:5px 8px;border:1px solid rgba(200,148,26,0.35);border-radius:2px;cursor:pointer;background:transparent;color:rgba(230,210,150,0.7);text-transform:uppercase;transition:all 0.15s;position:relative;}
+.nav-btn:hover{color:var(--parchment);border-color:var(--gold);}
+.nav-btn.active{background:rgba(200,148,26,0.2);color:var(--gold2);border-color:var(--gold);}
+.nav-badge{position:absolute;top:-5px;right:-5px;background:var(--dragon);color:#fff;font-size:8px;font-weight:700;width:15px;height:15px;border-radius:50%;display:flex;align-items:center;justify-content:center;animation:badgePulse 1.5s ease-in-out infinite;}
+@keyframes badgePulse{0%,100%{transform:scale(1);}50%{transform:scale(1.2);}}
+
+/* ── CONTENT ── */
+.content{position:relative;z-index:1;max-width:560px;margin:0 auto;padding:14px 12px 40px;}
+
+/* ── WELCOME ── */
+.welcome{background:linear-gradient(135deg,#f5e2b0,#ead090 50%,#f0dfa8);border:2px solid var(--gold);padding:12px 14px;display:flex;align-items:center;gap:12px;margin-bottom:14px;box-shadow:0 4px 20px rgba(0,0,0,0.6),inset 0 1px 0 rgba(230,184,48,0.3);position:relative;overflow:hidden;}
+.welcome::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 0% 0%,rgba(80,40,5,0.1) 0%,transparent 50%);pointer-events:none;z-index:0;}
+.welcome > *{position:relative;z-index:1;}
+.welcome-crest{width:46px;height:46px;object-fit:contain;flex-shrink:0;}
+.welcome-name{font-family:'Cinzel',serif;font-size:14px;font-weight:700;color:var(--ink);letter-spacing:0.05em;}
+.welcome-sub{font-size:13px;color:var(--ink-light);font-style:italic;margin-top:2px;}
+
+/* ── PARCHMENT ── */
+.parchment{
+  position:relative;
+  margin-bottom:14px;
+  background:linear-gradient(160deg,#f5e6bf,#ead5a0 35%,#f0dfa8 60%,#e8d090 85%,#f2e2b0);
+  border:2px solid var(--border);
+  box-shadow:0 6px 28px rgba(0,0,0,0.65),inset 0 0 50px rgba(139,100,20,0.1);
+  overflow:hidden;
+  /* Torn edge: use outline on a pseudo that sits BEHIND content */
+}
+
+/* Aged corner darkening */
+.parchment::before{
+  content:'';
+  position:absolute;
+  inset:0;
+  background:
+    radial-gradient(ellipse at 0% 0%,rgba(80,40,5,0.2) 0%,transparent 38%),
+    radial-gradient(ellipse at 100% 0%,rgba(70,35,5,0.16) 0%,transparent 33%),
+    radial-gradient(ellipse at 0% 100%,rgba(90,45,5,0.18) 0%,transparent 35%),
+    radial-gradient(ellipse at 100% 100%,rgba(80,40,5,0.16) 0%,transparent 32%);
+  pointer-events:none;
+  z-index:0;
+}
+
+/* Horizontal grain lines */
+.parchment::after{
+  content:'';
+  position:absolute;
+  inset:0;
+  background-image:repeating-linear-gradient(0deg,transparent,transparent 20px,rgba(139,100,20,0.032) 20px,rgba(139,100,20,0.032) 21px);
+  pointer-events:none;
+  z-index:0;
+}
+
+/* All direct children above texture */
+.parchment > *{position:relative;z-index:1;}
+
+/* ── SECTION TITLE ── */
+.section-title{font-family:'Cinzel',serif;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--border);text-align:center;padding:10px 14px 8px;position:relative;z-index:2;}
+.section-title::after{content:'';display:block;height:1px;background:linear-gradient(90deg,transparent,var(--border),transparent);margin-top:5px;opacity:0.45;}
+
+/* ── HOUSE CARDS ── */
+.houses-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:12px;position:relative;z-index:2;}
+.house-card{border:2px solid;border-radius:3px;padding:14px 10px;text-align:center;position:relative;overflow:hidden;}
+.house-card::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 50% 20%,rgba(255,255,255,0.07),transparent 70%);}
+.house-card.dragon{border-color:var(--dragon);background:linear-gradient(160deg,#1a0303,#0d0101);}
+.house-card.wolf{border-color:var(--wolf);background:linear-gradient(160deg,#010c1a,#000810);}
+.house-card.snake{border-color:var(--snake);background:linear-gradient(160deg,#011408,#000d04);}
+.house-card.lion{border-color:var(--lion);background:linear-gradient(160deg,#1a0e00,#0d0800);}
+.house-crest-img{width:58px;height:58px;object-fit:contain;display:block;margin:0 auto 6px;}
+.welcome-crest{width:46px;height:46px;object-fit:contain;flex-shrink:0;}
+.h-name{font-family:'Cinzel',serif;font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:4px;}
+.house-card.dragon .h-name,.house-card.dragon .h-pts{color:#d4423a;}
+.house-card.wolf   .h-name,.house-card.wolf   .h-pts{color:#3a7abf;}
+.house-card.snake  .h-name,.house-card.snake  .h-pts{color:#2a9a55;}
+.house-card.lion   .h-name,.house-card.lion   .h-pts{color:#d4901a;}
+.h-pts{font-family:'Cinzel Decorative','Cinzel',serif;font-size:30px;font-weight:900;line-height:1;text-shadow:0 2px 8px rgba(0,0,0,0.5);}
+.h-rank{font-size:10px;font-style:italic;color:rgba(230,210,160,0.45);margin-top:3px;}
+
+/* ── FORMS ── */
+.form-label{font-family:'Cinzel',serif;font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--ink-light);display:block;margin-bottom:5px;position:relative;z-index:2;}
+.form-input{width:100%;padding:10px 14px;border:none;border-top:1px solid rgba(122,85,16,0.3);border-bottom:1px solid rgba(122,85,16,0.3);background:rgba(122,85,16,0.06);font-family:'Crimson Text',serif;font-size:17px;color:var(--ink);outline:none;position:relative;z-index:2;}
+.form-input:focus{background:rgba(122,85,16,0.12);border-color:var(--border);}
+.form-group{margin-bottom:12px;}
+.input-wrap{position:relative;}
+.suggestions{position:absolute;left:0;right:0;background:var(--parchment);border:1px solid var(--border);border-top:none;z-index:300;max-height:160px;overflow-y:auto;}
+.suggestions div{padding:8px 14px;font-size:15px;cursor:pointer;border-bottom:1px solid rgba(122,85,16,0.15);}
+.suggestions div:hover{background:var(--parchment-dark);}
+
+/* ── HOUSE PICKERS ── */
+.house-picker{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:0 14px;position:relative;z-index:2;}
+.hpick-btn{padding:10px 4px;border:2px solid;border-radius:3px;font-family:'Cinzel',serif;font-size:10px;font-weight:700;cursor:pointer;background:transparent;text-align:center;line-height:1.4;transition:all 0.15s;}
+.hpick-btn .pe{font-size:18px;display:block;margin-bottom:2px;}
+.hpick-btn.dragon{border-color:var(--dragon);color:var(--dragon);}.hpick-btn.wolf{border-color:var(--wolf);color:var(--wolf);}
+.hpick-btn.snake{border-color:var(--snake);color:var(--snake);}.hpick-btn.lion{border-color:var(--lion);color:var(--lion);}
+.hpick-btn.sel.dragon{background:var(--dragon);color:#fff;}.hpick-btn.sel.wolf{background:var(--wolf);color:#fff;}
+.hpick-btn.sel.snake{background:var(--snake);color:#fff;}.hpick-btn.sel.lion{background:var(--lion);color:#fff;}
+
+/* ── ARCHERY SHOT BTNS ── */
+.arch-shot-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:0 14px;position:relative;z-index:2;}
+.arch-shot-btn{padding:14px 6px;border:2px solid var(--border);border-radius:3px;font-family:'Cinzel',serif;font-size:11px;font-weight:700;cursor:pointer;background:rgba(122,85,16,0.06);color:var(--ink);text-align:center;transition:all 0.15s;}
+.arch-shot-btn .ai{font-size:22px;display:block;margin-bottom:4px;}
+.arch-shot-btn.sel{background:var(--ink);color:var(--parchment);border-color:var(--ink);}
+
+/* ── BUTTONS ── */
+.btn-primary{display:block;width:calc(100% - 28px);margin:12px 14px 0;padding:13px;background:linear-gradient(180deg,#2a1508,#1a0c04);color:var(--parchment);border:2px solid var(--gold);font-family:'Cinzel',serif;font-size:12px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;cursor:pointer;border-radius:2px;transition:all 0.15s;box-shadow:0 2px 10px rgba(0,0,0,0.4),inset 0 1px 0 rgba(200,148,26,0.12);position:relative;z-index:2;}
+.btn-primary:hover{color:var(--gold2);box-shadow:0 2px 14px rgba(0,0,0,0.5);}
+.btn-primary:disabled{opacity:0.4;cursor:not-allowed;}
+.btn-sm{padding:7px 12px;background:linear-gradient(180deg,#2a1508,#1a0c04);color:var(--parchment);border:1px solid rgba(200,148,26,0.5);font-family:'Cinzel',serif;font-size:10px;font-weight:700;cursor:pointer;border-radius:2px;letter-spacing:0.04em;white-space:nowrap;transition:all 0.15s;}
+.btn-sm:hover{color:var(--gold2);}
+.btn-green{background:linear-gradient(180deg,#1a4a1a,#0d2a0d)!important;border-color:#2a9a55!important;}
+.btn-del{padding:4px 8px;background:#2a0505;color:#e74c3c;border:1px solid #c0392b;border-radius:2px;font-size:11px;cursor:pointer;flex-shrink:0;}
+
+/* ── SUCCESS ── */
+.success-block{text-align:center;padding:24px 14px;display:none;position:relative;z-index:2;}
+.success-block .s-icon{font-size:42px;margin-bottom:8px;}
+.success-block h2{font-family:'Cinzel',serif;font-size:17px;font-weight:700;color:var(--ink);margin-bottom:6px;}
+.success-block p{color:var(--ink-light);font-style:italic;font-size:14px;line-height:1.5;}
+
+/* ── ROWS ── */
+.lb-row{display:flex;align-items:center;padding:8px 14px;border-bottom:1px solid rgba(122,85,16,0.2);gap:8px;font-size:14px;position:relative;z-index:2;}
+.lb-row:last-child{border-bottom:none;}
+.lb-rank{font-family:'Cinzel',serif;font-size:11px;font-weight:700;color:var(--border);width:22px;flex-shrink:0;}
+.lb-name{flex:1;font-weight:600;color:var(--ink) !important;}
+.lb-sub{font-size:11px;font-style:italic;color:var(--ink-light) !important;font-weight:400;margin-top:1px;}
+.lb-pts{font-family:'Cinzel',serif;font-size:13px;font-weight:700;flex-shrink:0;}
+.dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
+.muted{font-size:13px;font-style:italic;color:var(--ink-light) !important;}
+.event-row{padding:9px 14px;border-bottom:1px solid rgba(122,85,16,0.22);position:relative;z-index:2;background:transparent;}
+.event-row:last-child{border-bottom:none;}
+.ev-name{font-size:14px;font-weight:600;color:var(--ink) !important;display:block;margin-bottom:3px;}
+.badge{font-family:'Cinzel',serif;font-size:10px;font-weight:700;padding:2px 6px;border-radius:2px;white-space:nowrap;text-transform:uppercase;display:inline-block;margin:1px;}
+.badge-dragon{background:var(--dragon);color:#fff;}.badge-wolf{background:var(--wolf);color:#fff;}
+.badge-snake{background:var(--snake);color:#fff;}.badge-lion{background:var(--lion);color:#fff;}
+.badge-none{background:rgba(122,85,16,0.15);color:var(--ink-light);}
+
+/* ── DUEL ── */
+.duel-item{padding:12px 14px;border-bottom:1px solid rgba(122,85,16,0.2);position:relative;z-index:2;}
+.duel-item:last-child{border-bottom:none;}
+.duel-vs{text-align:center;font-family:'Cinzel',serif;font-size:20px;font-weight:900;color:var(--gold2);padding:6px 0;position:relative;z-index:2;}
+
+/* ── PERSONAL ── */
+.personal-pts{font-family:'Cinzel Decorative','Cinzel',serif;font-size:52px;font-weight:900;line-height:1;margin:8px 0;}
+.personal-house-badge{display:inline-block;padding:4px 14px;border-radius:2px;font-family:'Cinzel',serif;font-size:12px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;margin-top:6px;}
+
+/* ── RIDDLES ── */
+.riddle-card{padding:14px;margin-bottom:10px;position:relative;background:linear-gradient(160deg,#f5e6bf,#ead5a0 35%,#f0dfa8 60%,#e8d090);border:2px solid var(--border);overflow:hidden;}
+.riddle-card > *{position:relative;z-index:1;}
+.riddle-card.locked{text-align:center;padding:20px;opacity:0.7;}
+.riddle-card.solved{border-color:#1e8449!important;}
+.riddle-lock{font-size:28px;margin-bottom:4px;}
+.riddle-num{font-family:'Cinzel',serif;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--border);margin-bottom:8px;}
+.riddle-q{font-size:15px;font-style:italic;color:var(--ink);line-height:1.65;}
+.riddle-hint{margin-top:8px;padding:8px;background:rgba(122,85,16,0.1);border-radius:3px;font-size:13px;font-style:italic;color:var(--ink-light);}
+.riddle-hint-locked{margin-top:8px;font-size:12px;font-style:italic;color:rgba(122,85,16,0.45);}
+
+/* ── ADMIN ── */
+.admin-row{padding:10px 14px;border-bottom:1px solid rgba(122,85,16,0.2);position:relative;z-index:2;}
+.admin-row:last-child{border-bottom:none;}
+.admin-ename{font-family:'Cinzel',serif;font-size:12px;font-weight:700;color:var(--ink);margin-bottom:5px;}
+.rank-legend{display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap;}
+.rank-legend span{font-size:10px;font-style:italic;color:var(--ink-light);background:rgba(122,85,16,0.1);padding:2px 5px;border-radius:2px;}
+.house-btn-row{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;flex:1;}
+.hbtn{padding:6px 3px;border:2px solid;border-radius:3px;font-family:'Cinzel',serif;font-size:9px;font-weight:700;cursor:pointer;background:transparent;text-align:center;transition:all 0.15s;line-height:1.3;}
+.hbtn.dragon{border-color:var(--dragon);color:var(--dragon);}.hbtn.wolf{border-color:var(--wolf);color:var(--wolf);}
+.hbtn.snake{border-color:var(--snake);color:var(--snake);}.hbtn.lion{border-color:var(--lion);color:var(--lion);}
+.hbtn.sel.dragon{background:var(--dragon);color:#fff;}.hbtn.sel.wolf{background:var(--wolf);color:#fff;}
+.hbtn.sel.snake{background:var(--snake);color:#fff;}.hbtn.sel.lion{background:var(--lion);color:#fff;}
+.bonus-row{display:flex;gap:6px;align-items:center;flex-wrap:wrap;}
+.bonus-row select,.bonus-row input{padding:7px 8px;border:1px solid var(--border);border-radius:2px;background:var(--parchment-dark);font-family:'Crimson Text',serif;font-size:14px;color:var(--ink);}
+.bonus-row input{width:65px;font-family:'Cinzel',serif;}
+.btn-danger{display:block;width:100%;padding:10px;background:#2a0505;color:#e74c3c;border:1px solid #c0392b;border-radius:2px;font-family:'Cinzel',serif;font-size:11px;font-weight:700;cursor:pointer;letter-spacing:0.05em;margin-top:6px;}
+
+/* ── QR ── */
+.qr-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.qr-card{padding:12px 10px;text-align:center;position:relative;z-index:2;}
+.qr-card h3{font-family:'Cinzel',serif;font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--ink);margin-bottom:3px;}
+.qr-card p{font-size:10px;color:var(--ink-light);font-style:italic;margin-bottom:8px;}
+.qr-wrap{display:flex;justify-content:center;}
+
+/* ── FILE UPLOAD ── */
+.file-btn{display:block;width:100%;padding:12px;margin-bottom:8px;border:2px dashed var(--border);border-radius:2px;background:rgba(122,85,16,0.05);font-family:'Cinzel',serif;font-size:12px;font-weight:700;color:var(--ink-light);text-align:center;cursor:pointer;letter-spacing:0.06em;position:relative;z-index:2;}
+.file-btn:hover{background:rgba(122,85,16,0.1);}
+input[type=file]{display:none;}
+
+/* ── WAX SEAL ── */
+.wax-seal{width:86px;height:86px;margin:0 auto 16px;animation:sealGlow 3s ease-in-out infinite;filter:drop-shadow(0 4px 12px rgba(139,0,0,0.5));display:block;}
+@keyframes sealGlow{0%,100%{filter:drop-shadow(0 4px 8px rgba(139,0,0,0.4));}50%{filter:drop-shadow(0 4px 18px rgba(200,0,0,0.7));}}
+
+/* ── MODAL ── */
+.modal-overlay{position:fixed;inset:0;background:rgba(5,2,0,0.88);z-index:500;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(2px);}
+.modal-box{position:relative;max-width:340px;width:100%;overflow:hidden;background:linear-gradient(160deg,#f5e6bf,#ead5a0 40%,#f0dfa8 70%,#e8d090);border:3px solid var(--gold);box-shadow:0 10px 50px rgba(0,0,0,0.9),inset 0 0 40px rgba(139,100,20,0.1);}
+.modal-box > *{position:relative;z-index:1;}
+.modal-title{font-family:'Cinzel',serif;font-size:15px;font-weight:900;color:var(--ink);text-align:center;letter-spacing:0.08em;padding:16px 20px 6px;}
+.modal-body{font-size:14px;color:var(--ink-light);text-align:center;font-style:italic;padding:0 20px 16px;line-height:1.7;}
+.modal-divider{height:1px;background:linear-gradient(90deg,transparent,var(--border),transparent);margin:0 14px;opacity:0.4;}
+.modal-btns{display:flex;}
+.modal-btn{flex:1;padding:14px;font-family:'Cinzel',serif;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer;border:none;transition:all 0.15s;}
+.modal-btn-cancel{background:transparent;color:var(--ink-light);border-right:1px solid rgba(122,85,16,0.3);}
+.modal-btn-cancel:hover{background:rgba(122,85,16,0.08);}
+.modal-btn-confirm{background:linear-gradient(180deg,#2a1508,#1a0c04);color:var(--parchment);}
+.modal-btn-confirm:hover{color:var(--gold2);}
+
+/* ── CONFETTI ── */
+.confetti-piece{position:fixed;top:-20px;border-radius:2px;animation:cfall linear forwards;z-index:1000;pointer-events:none;}
+@keyframes cfall{0%{transform:translateY(0) rotate(0deg);opacity:1;}85%{opacity:1;}100%{transform:translateY(105vh) rotate(800deg);opacity:0;}}
+
+/* ── COLLAPSIBLE MAESTER SECTIONS ── */
+.collapse-header{
+  cursor:pointer;
+  user-select:none;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:10px 14px 8px;
+  position:relative;
+  z-index:2;
+}
+.collapse-header:hover{background:rgba(122,85,16,0.06);}
+.collapse-header .ch-title{
+  font-family:'Cinzel',serif;
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:0.1em;
+  text-transform:uppercase;
+  color:var(--border);
+}
+.collapse-header .ch-arrow{
+  font-size:10px;
+  color:var(--border);
+  transition:transform 0.2s;
+  flex-shrink:0;
+}
+.collapse-header.open .ch-arrow{transform:rotate(180deg);}
+.collapse-header::after{
+  content:'';
+  display:block;
+  position:absolute;
+  bottom:0;left:14px;right:14px;
+  height:1px;
+  background:linear-gradient(90deg,transparent,var(--border),transparent);
+  opacity:0.4;
+}
+.collapse-body{
+  display:none;
+  position:relative;
+  z-index:2;
+}
+.collapse-body.open{display:block;}
+
+/* ── PAGE TITLES ── */
+.page-title{text-align:center;margin-bottom:14px;}
+.page-title h1{font-family:'Cinzel',serif;font-size:18px;font-weight:900;color:var(--parchment);text-shadow:0 2px 8px rgba(0,0,0,0.8);letter-spacing:0.05em;line-height:1.25;}
+.page-title p{color:var(--gold2);font-style:italic;font-size:12px;margin-top:4px;}
+
+/* ── LOADING ── */
+#loading{position:fixed;inset:0;background:rgba(8,3,1,0.92);display:flex;align-items:center;justify-content:center;z-index:9999;flex-direction:column;gap:14px;}
+#loading p{font-family:'Cinzel',serif;font-size:13px;color:var(--parchment);letter-spacing:0.1em;}
+.spinner{width:36px;height:36px;border:3px solid rgba(200,148,26,0.2);border-top-color:var(--gold);border-radius:50%;animation:spin 0.8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+/* ── TOAST ── */
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(100px);background:linear-gradient(180deg,#2a1508,#1a0c04);color:var(--parchment);font-family:'Cinzel',serif;font-size:12px;padding:10px 20px;border:1px solid var(--gold);border-radius:2px;transition:transform 0.3s;z-index:9999;max-width:90vw;text-align:center;}
+.toast.show{transform:translateX(-50%) translateY(0);}
+</style>
+</head>
+<body>
+
+<!-- SVG FILTERS — torn parchment edges, text unaffected -->
+<svg class="svg-filters" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Full torn edge for main cards -->
+    <filter id="torn" x="-4%" y="-4%" width="108%" height="108%" color-interpolation-filters="linearRGB">
+      <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="4" seed="9" result="noise"/>
+      <feDisplacementMap in="SourceGraphic" in2="noise" scale="6" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+    <!-- Lighter torn edge for smaller elements -->
+    <filter id="torn-sm" x="-3%" y="-3%" width="106%" height="106%" color-interpolation-filters="linearRGB">
+      <feTurbulence type="fractalNoise" baseFrequency="0.045" numOctaves="4" seed="14" result="noise"/>
+      <feDisplacementMap in="SourceGraphic" in2="noise" scale="4" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+  </defs>
+</svg>
+
+<div class="bg"></div>
+<div class="torch torch-l">🔥</div>
+<div class="torch torch-r">🔥</div>
+
+<nav>
+  <button class="nav-btn active" id="nav-scoreboard" onclick="showView('scoreboard')">⚔ Standings</button>
+  <button class="nav-btn" id="nav-archery"  onclick="showView('archery')">🏹 Archery</button>
+  <button class="nav-btn" id="nav-nail"     onclick="showView('nail')">🔨 Nail Log</button>
+  <button class="nav-btn" id="nav-duel" style="position:relative" onclick="showView('duel')">⚔ Duels<div class="nav-badge" id="duel-badge" style="display:none">0</div></button>
+  <button class="nav-btn" id="nav-personal" onclick="showView('personal')">👤 My Honour</button>
+  <button class="nav-btn" id="nav-art"      onclick="showView('art')">🎨 Art</button>
+  <button class="nav-btn" id="nav-riddles"  onclick="showView('riddles')">🧠 Riddles</button>
+  <button class="nav-btn" id="nav-bestdressed" onclick="showView('bestdressed')">👑 Best Dressed</button>
+  <button class="nav-btn" id="nav-qr" onclick="showView('qr')">📋 QR Codes</button>
+  <button class="nav-btn" id="nav-maester"  onclick="showView('maester')">📜 Grand Maester</button>
+</nav>
+
+<!-- ══ SCOREBOARD ══ -->
+<div id="view-scoreboard" class="view active">
+  <div class="content">
+    <div id="welcome-banner" class="welcome" style="display:none">
+      <img class="welcome-crest" id="wb-crest" src="" alt=""/>
+      <div><div class="welcome-name" id="wb-name"></div><div class="welcome-sub" id="wb-sub"></div></div>
+    </div>
+    <div class="page-title"><h1>⚔ William's Tournament ⚔</h1><p>21st Birthday — House Championship</p></div>
+    <div class="houses-grid" id="sb-houses"></div>
+    <div class="parchment"><div class="section-title">⚔ Team Events</div><div id="sb-team-rows"></div></div>
+    <div class="parchment"><div class="section-title">👤 Personal Honour by House</div><div id="sb-personal-sums"></div></div>
+  </div>
+</div>
+
+<!-- ══ ARCHERY ══ -->
+<div id="view-archery" class="view">
+  <div class="content">
+    <div class="page-title"><h1>🏹 Archery Range</h1><p>Loose thy arrow · earn honour for thy house</p></div>
+    <div class="parchment">
+      <div id="arch-form">
+        <div style="height:12px"></div>
+        <div class="form-group"><label class="form-label" style="padding:0 14px">Thy Name</label><div class="input-wrap"><input class="form-input" type="text" id="arch-name" placeholder="Begin typing..." autocomplete="off"/><div class="suggestions" id="arch-sug" style="display:none"></div></div></div>
+        <div class="form-group"><label class="form-label" style="padding:0 14px">Thy House</label><div class="house-picker"><button class="hpick-btn arch-house-btn dragon" onclick="setArchHouse('dragon')"><span class="pe">🐉</span>Dragon</button><button class="hpick-btn arch-house-btn wolf" onclick="setArchHouse('wolf')"><span class="pe">🐺</span>Wolf</button><button class="hpick-btn arch-house-btn snake" onclick="setArchHouse('snake')"><span class="pe">🐍</span>Snake</button><button class="hpick-btn arch-house-btn lion" onclick="setArchHouse('lion')"><span class="pe">🦁</span>Lion</button></div></div>
+        <div class="form-group"><label class="form-label" style="padding:0 14px">Thy Shot</label><div class="arch-shot-grid"><button class="arch-shot-btn" onclick="setArchScore(3,this)"><span class="ai">🎯</span>Bullseye<br><small style="font-size:10px">3 pts</small></button><button class="arch-shot-btn" onclick="setArchScore(2,this)"><span class="ai">⭕</span>1st Ring<br><small style="font-size:10px">2 pts</small></button><button class="arch-shot-btn" onclick="setArchScore(1,this)"><span class="ai">🏹</span>Hit!<br><small style="font-size:10px">1 pt</small></button></div></div>
+        <button class="btn-primary" id="arch-submit-btn" onclick="submitArchery()">Record My Shot</button>
+        <div style="height:14px"></div>
+      </div>
+      <div class="success-block" id="arch-success"><div class="s-icon">🏹</div><h2>Shot Recorded!</h2><p id="arch-success-txt"></p><button class="btn-primary" style="margin-top:14px" onclick="resetArch()">Shoot Again</button><div style="height:14px"></div></div>
+    </div>
+    <div class="parchment"><div class="section-title">🏹 House Rankings</div><div id="arch-board"></div></div>
+    <div class="parchment"><div class="section-title">Individual Shots</div><div id="arch-solo-board"></div></div>
+  </div>
+</div>
+
+<!-- ══ NAIL ══ -->
+<div id="view-nail" class="view">
+  <div class="content">
+    <div class="page-title"><h1>🔨 Nail Into Log</h1><p>10 minus thy swings = honour points · Strike true!</p></div>
+    <div class="parchment">
+      <div id="nail-form">
+        <div style="height:12px"></div>
+        <div class="form-group"><label class="form-label" style="padding:0 14px">Thy Name</label><div class="input-wrap"><input class="form-input" type="text" id="nail-name" placeholder="Begin typing..." autocomplete="off"/><div class="suggestions" id="nail-sug" style="display:none"></div></div></div>
+        <div class="form-group"><label class="form-label" style="padding:0 14px">Thy House</label><div class="house-picker"><button class="hpick-btn nail-house-btn dragon" onclick="setNailHouse('dragon')"><span class="pe">🐉</span>Dragon</button><button class="hpick-btn nail-house-btn wolf" onclick="setNailHouse('wolf')"><span class="pe">🐺</span>Wolf</button><button class="hpick-btn nail-house-btn snake" onclick="setNailHouse('snake')"><span class="pe">🐍</span>Snake</button><button class="hpick-btn nail-house-btn lion" onclick="setNailHouse('lion')"><span class="pe">🦁</span>Lion</button></div></div>
+        <div class="form-group"><label class="form-label" style="padding:0 14px">Number of Swings</label><input class="form-input" type="number" id="nail-swings" placeholder="e.g. 7" min="1"/><div style="padding:4px 14px;font-size:11px;font-style:italic;color:var(--ink-light);position:relative;z-index:2">10 minus swings = honour pts · Under 10 scores!</div></div>
+        <button class="btn-primary" id="nail-submit-btn" onclick="submitNail()">Record My Swings</button>
+        <div style="height:14px"></div>
+      </div>
+      <div class="success-block" id="nail-success"><div class="s-icon">🔨</div><h2>Recorded in the Scrolls!</h2><p id="nail-success-txt"></p><button class="btn-primary" style="margin-top:14px" onclick="resetNail()">Another Attempt</button><div style="height:14px"></div></div>
+    </div>
+    <div class="parchment"><div class="section-title">🔨 Leaderboard — Fewest Swings</div><div id="nail-board"></div></div>
+  </div>
+</div>
+
+<!-- ══ DUELS ══ -->
+<div id="view-duel" class="view">
+  <div class="content">
+    <div class="page-title"><h1>⚔ The Dueling Grounds</h1><p>Wager thy honour — winner takes all</p></div>
+    <div class="parchment">
+      <div class="section-title">Issue a Challenge</div>
+      <div style="padding:12px 0">
+        <div class="form-group"><label class="form-label" style="padding:0 14px">Challenger (Thee)</label><div class="input-wrap"><input class="form-input" type="text" id="duel-p1" placeholder="Thy name..." autocomplete="off"/><div class="suggestions" id="duel-sug1" style="display:none"></div></div></div>
+        <div class="duel-vs">⚔ VS ⚔</div>
+        <div class="form-group" style="margin-top:8px"><label class="form-label" style="padding:0 14px">Thy Opponent</label><div class="input-wrap"><input class="form-input" type="text" id="duel-p2" placeholder="Their name..." autocomplete="off"/><div class="suggestions" id="duel-sug2" style="display:none"></div></div></div>
+        <div class="form-group"><label class="form-label" style="padding:0 14px">Honour Wagered (pts each)</label><input class="form-input" type="number" id="duel-wager" placeholder="e.g. 5" min="1"/><div style="padding:4px 14px;font-size:11px;font-style:italic;color:var(--ink-light);position:relative;z-index:2">Thou canst not wager more than thy current honour</div></div>
+        <button class="btn-primary" id="duel-issue-btn" onclick="issueDuel()">Issue the Challenge ⚔</button>
+        <div style="height:14px"></div>
+      </div>
+    </div>
+    <div class="parchment"><div class="section-title">Active Duels</div><div id="pending-duels"></div></div>
+    <div class="parchment"><div class="section-title">Battle History</div><div id="duel-history"></div></div>
+  </div>
+</div>
+
+<!-- ══ PERSONAL ══ -->
+<div id="view-personal" class="view">
+  <div class="content">
+    <div class="page-title"><h1>👤 My Honour</h1><p>Seek thy name in the scrolls</p></div>
+    <div class="parchment">
+      <div style="padding:12px 0 0">
+        <div class="form-group"><label class="form-label" style="padding:0 14px">Thy Name</label><div class="input-wrap"><input class="form-input" type="text" id="personal-name" placeholder="Begin typing..." autocomplete="off"/><div class="suggestions" id="personal-sug" style="display:none"></div></div></div>
+        <button class="btn-primary" style="margin-bottom:14px" onclick="lookupPersonal()">Consult the Scrolls</button>
+      </div>
+      <div id="personal-result" style="display:none">
+        <div class="section-title" id="personal-name-title">—</div>
+        <div style="text-align:center;padding:18px 14px 10px;position:relative;z-index:2">
+          <div style="font-family:'Cinzel',serif;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:var(--ink-light)">Personal Honour</div>
+          <div class="personal-pts" id="personal-pts-val">0</div>
+          <div class="personal-house-badge" id="personal-house-badge"></div>
+        </div>
+        <div class="section-title" style="font-size:10px">Honour Breakdown</div>
+        <div id="personal-breakdown"></div>
+        <div class="section-title" style="font-size:10px">Duel Record</div>
+        <div id="personal-duels"></div>
+        <div style="height:14px"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ ART ══ -->
+<div id="view-art" class="view">
+  <div class="content">
+    <div class="page-title"><h1>🎨 Conquests of the Brush</h1><p>Submit thy anonymous masterpiece · Let the realm judge</p></div>
+    <div class="parchment">
+      <div id="art-form">
+        <div style="height:12px"></div>
+        <div class="form-group"><label class="form-label" style="padding:0 14px">Thy Name (seen only by the Grand Maester)</label><div class="input-wrap"><input class="form-input" type="text" id="art-name" placeholder="Thy name..." autocomplete="off"/><div class="suggestions" id="art-sug" style="display:none"></div></div></div>
+        <div class="form-group"><label class="form-label" style="padding:0 14px">Thy House</label><select class="form-input" id="art-house" style="font-size:15px"><option value="">-- Select House --</option><option value="dragon">🐉 House Dragon</option><option value="wolf">🐺 House Wolf</option><option value="snake">🐍 House Snake</option><option value="lion">🦁 House Lion</option></select></div>
+        <div class="form-group">
+          <label class="form-label" style="padding:0 14px">Thy Masterpiece</label>
+          <div style="padding:0 14px">
+            <label class="file-btn" for="art-file-cam">📸 Capture thy Masterpiece</label>
+            <input type="file" id="art-file-cam" accept="image/*" capture="environment" onchange="handleArtFile(this)"/>
+            <label class="file-btn" for="art-file-gal">🖼️ Upload thy Masterpiece</label>
+            <input type="file" id="art-file-gal" accept="image/*" onchange="handleArtFile(this)"/>
+          </div>
+          <div id="art-status" style="padding:5px 14px;font-size:12px;font-style:italic;color:var(--ink-light);position:relative;z-index:2"></div>
+        </div>
+        <button class="btn-primary" id="art-submit-btn" onclick="submitArt()">Submit to the Gallery</button>
+        <div style="height:14px"></div>
+      </div>
+      <div class="success-block" id="art-success"><div class="s-icon">🎨</div><h2>Masterpiece Submitted!</h2><p>Thy work hath been added to the gallery, anonymous to all but the Grand Maester. May the realm judge thee kindly!</p><button class="btn-primary" style="margin-top:14px" onclick="resetArt()">Submit Another</button><div style="height:14px"></div></div>
+    </div>
+    <div class="parchment"><div class="section-title">🎨 The Gallery — Rate Each Work 1–5 ⭐</div><div id="art-gallery" style="padding:10px"></div></div>
+  </div>
+</div>
+
+<!-- ══ RIDDLES ══ -->
+<div id="view-riddles" class="view">
+  <div class="content">
+    <div class="page-title"><h1>🧠 Trials of the Mind</h1><p>Prove thy wisdom · First to answer earns glory for thy house</p></div>
+    <div id="riddle-list"></div>
+  </div>
+</div>
+
+<!-- ══ QR CODES ══ -->
+<div id="view-qr" class="view">
+  <div class="content">
+    <div class="page-title"><h1>📋 Station Scrolls</h1><p>Screenshot each card · print at thy stations</p></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px" id="qr-page-grid"></div>
+  </div>
+</div>
+
+<!-- ══ BEST DRESSED ══ -->
+<div id="view-bestdressed" class="view">
+  <div class="content">
+    <div class="page-title"><h1>👑 Best Dressed</h1><p>Cast thy vote for the finest attire in the realm · One vote per warrior</p></div>
+    <div class="parchment">
+      <div id="bd-form">
+        <div style="height:12px"></div>
+        <div class="form-group">
+          <label class="form-label" style="padding:0 14px">Who deserves the crown?</label>
+          <div class="input-wrap">
+            <input class="form-input" type="text" id="bd-name" placeholder="Name a warrior..." autocomplete="off"/>
+            <div class="suggestions" id="bd-sug" style="display:none"></div>
+          </div>
+        </div>
+        <div style="padding:0 14px 10px;font-size:13px;font-style:italic;color:var(--ink-light);position:relative;z-index:2">Thy vote is secret — results revealed only by the Grand Maester</div>
+        <button class="btn-primary" id="bd-submit-btn" onclick="submitBestDressedVote()">Cast My Vote 👑</button>
+        <div style="height:14px"></div>
+      </div>
+      <div class="success-block" id="bd-success" style="display:none">
+        <div class="s-icon">👑</div>
+        <h2>Vote Cast!</h2>
+        <p>Thou hast voted for <strong id="bd-voted-name"></strong>. The Grand Maester shall reveal the winner in due time!</p>
+        <div style="height:14px"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ GRAND MAESTER ══ -->
+<div id="view-maester" class="view">
+  <div class="content">
+    <div class="page-title"><h1>📜 Grand Maester</h1><p>Only the Maester may enter herein</p></div>
+    <div class="parchment" id="maester-login">
+      <div style="padding:24px 20px;text-align:center;position:relative;z-index:2">
+        <svg class="wax-seal" viewBox="0 0 90 90" xmlns="http://www.w3.org/2000/svg">
+          <defs><radialGradient id="wg" cx="38%" cy="35%"><stop offset="0%" stop-color="#c0392b" stop-opacity="0.7"/><stop offset="60%" stop-color="#8b0000"/><stop offset="100%" stop-color="#4a0000"/></radialGradient><radialGradient id="wg2" cx="30%" cy="25%"><stop offset="0%" stop-color="rgba(255,100,80,0.3)"/><stop offset="100%" stop-color="transparent"/></radialGradient></defs>
+          <ellipse cx="20" cy="78" rx="8" ry="5" fill="#6b0000" opacity="0.6"/>
+          <ellipse cx="70" cy="80" rx="6" ry="4" fill="#6b0000" opacity="0.5"/>
+          <ellipse cx="45" cy="83" rx="5" ry="3.5" fill="#6b0000" opacity="0.4"/>
+          <circle cx="45" cy="44" r="38" fill="url(#wg)"/><circle cx="45" cy="44" r="38" fill="url(#wg2)"/>
+          <circle cx="45" cy="44" r="32" fill="none" stroke="#e6a817" stroke-width="1.5" opacity="0.5"/>
+          <path d="M27 42 L27 35 L32 39 L37 30 L42 37 L45 28 L48 37 L53 30 L58 39 L63 35 L63 42 Z" fill="#e6a817"/>
+          <rect x="27" y="42" width="36" height="5" fill="#e6a817" rx="1"/>
+          <text x="45" y="58" text-anchor="middle" font-family="'Cinzel',serif" font-size="12" font-weight="bold" fill="#e6a817" letter-spacing="3">GM</text>
+          <circle cx="45" cy="15" r="2.5" fill="#e6a817" opacity="0.5"/><circle cx="16" cy="44" r="2.5" fill="#e6a817" opacity="0.5"/><circle cx="74" cy="44" r="2.5" fill="#e6a817" opacity="0.5"/><circle cx="45" cy="73" r="2.5" fill="#e6a817" opacity="0.5"/>
+        </svg>
+        <div style="font-family:'Cinzel',serif;font-size:13px;font-weight:700;color:var(--ink);margin-bottom:12px">Speak the Sacred Password</div>
+        <input class="form-input" type="password" id="maester-pw" placeholder="• • • •" style="text-align:center;margin-bottom:12px"/>
+        <button class="btn-primary" style="margin:0" onclick="maesterLogin()">Enter the Sanctum</button>
+        <div style="height:14px"></div>
+      </div>
+    </div>
+    <div id="maester-panel" style="display:none">
+      <div class="parchment"><div class="section-title">⚔ Team Event Rankings</div><div id="maester-team"></div></div>
+      <div class="parchment"><div class="section-title">🥚 Dragon Eggs</div><div class="admin-row"><div class="muted" style="margin-bottom:8px">3 pts per egg · cap 30 per house</div><div class="bonus-row"><select id="egg-house"><option value="dragon">🐉 Dragon</option><option value="wolf">🐺 Wolf</option><option value="snake">🐍 Snake</option><option value="lion">🦁 Lion</option></select><input type="number" id="egg-count" placeholder="eggs" min="1" value="1"/><button class="btn-sm" onclick="addEggs()">+ Eggs</button></div><div id="maester-egg-totals" style="margin-top:8px;font-size:12px;color:var(--ink-light)"></div></div></div>
+      <div class="parchment"><div class="section-title">✨ Manual Honour Points</div><div class="admin-row"><div class="bonus-row"><select id="bonus-house"><option value="dragon">🐉 Dragon</option><option value="wolf">🐺 Wolf</option><option value="snake">🐍 Snake</option><option value="lion">🦁 Lion</option></select><input type="number" id="bonus-pts" placeholder="pts" value="1"/><button class="btn-sm" onclick="addBonus()">+ Add</button></div></div></div>
+      <div class="parchment"><div class="section-title">🧠 Riddle Control</div><div id="maester-riddles"></div></div>
+      <div class="parchment"><div class="section-title">🎨 Art Submissions (Private)</div><div id="maester-art" style="padding:10px"></div></div>
+      <div class="parchment"><div class="section-title">👑 Individual Honour Board</div><div id="maester-indiv"></div></div>
+      <div class="parchment"><div class="section-title">🏹 Archery Entries</div><div id="maester-arch"></div></div>
+      <div class="parchment"><div class="section-title">🔨 Nail Log Entries</div><div id="maester-nail"></div></div>
+      <div class="parchment"><div class="section-title">⚔ All Duels</div><div id="maester-duels"></div></div>
+
+      <div class="parchment"><div class="section-title">⚠ Danger Zone</div><div class="admin-row"><button class="btn-danger" onclick="confirmReset()">Wipe All Scrolls — Reset Tournament</button></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL -->
+<div class="modal-overlay" id="modal-overlay" style="display:none" onclick="hideModal()">
+  <div class="modal-box" onclick="event.stopPropagation()">
+    <div style="text-align:center;padding:16px 20px 8px">
+      <svg width="44" height="44" viewBox="0 0 52 52" xmlns="http://www.w3.org/2000/svg"><defs><radialGradient id="mg" cx="35%" cy="30%"><stop offset="0%" stop-color="#c0392b" stop-opacity="0.7"/><stop offset="100%" stop-color="#4a0000"/></radialGradient></defs><circle cx="26" cy="26" r="24" fill="url(#mg)"/><circle cx="26" cy="26" r="19" fill="none" stroke="#e6a817" stroke-width="1.2" opacity="0.5"/><text x="26" y="31" text-anchor="middle" font-size="18" fill="#e6a817">⚔</text></svg>
+    </div>
+    <div class="modal-title" id="modal-title">Confirm</div>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-divider"></div>
+    <div class="modal-btns">
+      <button class="modal-btn modal-btn-cancel" id="modal-cancel" onclick="hideModal()">Nay, Retreat</button>
+      <button class="modal-btn modal-btn-confirm" id="modal-confirm">Aye, Proceed</button>
+    </div>
+  </div>
+</div>
+
+<!-- AUDIO UNLOCK SPLASH -->
+<div id="audio-splash" style="position:fixed;inset:0;background:rgba(8,3,1,0.97);z-index:99999;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;cursor:pointer" onclick="unlockAudio()">
+  <div style="font-size:48px;animation:tflame 2s ease-in-out infinite alternate">🔥</div>
+  <div style="font-family:'Cinzel',serif;font-size:22px;font-weight:900;color:#f2e8d0;letter-spacing:0.1em;text-align:center;line-height:1.3">⚔ William's<br>Tournament ⚔</div>
+  <div style="font-family:'Cinzel',serif;font-size:11px;color:#c8941a;letter-spacing:0.12em;text-transform:uppercase;margin-top:4px">Tap to Enter the Realm</div>
+  <div style="width:60px;height:1px;background:linear-gradient(90deg,transparent,#c8941a,transparent)"></div>
+  <div style="font-family:'Crimson Text',serif;font-size:13px;color:rgba(230,210,150,0.5);font-style:italic">21st Birthday · House Championship</div>
+</div>
+
+<div id="loading"><div class="spinner"></div><p>The Scrolls Are Being Fetched...</p></div>
+<div class="toast" id="toast"></div>
+</body>
+</html>

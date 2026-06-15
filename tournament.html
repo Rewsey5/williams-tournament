@@ -236,10 +236,12 @@ function updateDuelBadge(){
     badge.textContent=count;
   }
 
-  // Only show alert if we know our name AND there are new pending challenges for us
-  if(!myName||!myPending.length) return;
+  // Only show alert if we know our name, it's a real name (not empty), and there are NEW challenges
+  if(!myName||myName.trim()===''||!myPending.length) return;
   const newChallenges=myPending.filter(d=>!alertedDuels.has(d.id));
   if(!newChallenges.length) return;
+  // Double-check the challenger name exists
+  if(!newChallenges[0].p1||newChallenges[0].p1.trim()==='') return;
 
   const items=document.getElementById('duel-alert-items');
   if(!items)return;
@@ -732,30 +734,7 @@ async function toggleHint(rid,val){await fsSet('state/riddles',{[rid]:{...(S.rid
 async function confirmReset(){showModal('Reset Tournament','This will wipe ALL scrolls — every score, duel and entry — for eternity. Art thou absolutely certain?','Wipe the Scrolls',async()=>{const cols=['archery','nail','duels','art'];for(const col of cols){const s=await getDocs(collection(db,col));for(const d of s.docs)await deleteDoc(d.ref);}await setDoc(doc(db,'state','teamRankings'),{});await setDoc(doc(db,'state','eggs'),{dragon:0,wolf:0,snake:0,lion:0});await setDoc(doc(db,'state','bonus'),{dragon:0,wolf:0,snake:0,lion:0});await setDoc(doc(db,'state','playerHouses'),{});await setDoc(doc(db,'state','riddles'),{});toast('The scrolls have been wiped clean');renderMaester();});}
 
 // ══ PUBLIC QR PAGE ══
-function renderPublicQR(){
-  const base=window.location.href.split('?')[0].split('#')[0];
-  const stations=[
-    {label:'⚔ Standings',     desc:'Live house standings',       param:'view=scoreboard'},
-    {label:'👤 My Honour',    desc:'Check thy personal honour',  param:'view=personal'},
-    {label:'⚔ Duel Station', desc:'Challenge a fellow warrior', param:'view=duel'},
-    {label:'🏹 Archery Range',desc:'Submit thy shot result',     param:'view=archery'},
-    {label:'🔨 Nail Into Log',desc:'Record thy swing count',     param:'view=nail'},
-    {label:'🎨 Art Challenge',desc:'Submit thy masterpiece',     param:'view=art'},
-    {label:'🧠 Trials of Mind',desc:'Test thy wits',            param:'view=riddles'},
-    {label:'👑 Best Dressed', desc:'Cast thy vote',              param:'view=bestdressed'},
-  ];
-  const grid=document.getElementById('public-qr-grid');if(!grid)return;
-  grid.innerHTML='';
-  stations.forEach(s=>{
-    const url=base+'?'+s.param;
-    const sid='pqr_'+Math.random().toString(36).slice(2);
-    const card=document.createElement('div');
-    card.className='parchment qr-card';
-    card.innerHTML=`<h3>${s.label}</h3><p>${s.desc}</p><div class="qr-wrap" id="${sid}"></div>`;
-    grid.appendChild(card);
-    setTimeout(()=>{try{new QRCode(document.getElementById(sid),{text:url,width:120,height:120,colorDark:'#1a1208',colorLight:'#f2e8d0',correctLevel:QRCode.CorrectLevel.M});}catch(e){}},80);
-  });
-}
+// publicQR removed — QR codes only in Grand Maester panel
 
 // ══ QR ══
 function renderQR(){

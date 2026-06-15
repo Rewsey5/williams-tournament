@@ -234,56 +234,16 @@ function setupNameInput(inputId,sugId,onPick){
 }
 
 // ══ DUEL BADGE + ALERT ══
-// Track which duel IDs we've already alerted so we don't re-show dismissed ones
-const alertedDuels = new Set(JSON.parse(localStorage.getItem('wt_alerted_duels')||'[]'));
-
 function updateDuelBadge(){
   const myName=getMyName();
-
-  // Only show personal badge if we know who we are
-  const myPending=myName
-    ? S.duels.filter(d=>d.status==='pending'&&normName(d.p2)===normName(myName))
-    : [];
-  const allActive=S.duels.filter(d=>d.status==='pending'||d.status==='awaiting');
-
+  const active=S.duels.filter(d=>d.status==='pending'||d.status==='awaiting');
+  const mine=myName?S.duels.filter(d=>d.status==='pending'&&normName(d.p2)===normName(myName)):[];
   const badge=document.getElementById('duel-badge');
-  if(badge){
-    const count=myName?myPending.length:allActive.length;
-    badge.style.display=count>0?'flex':'none';
-    badge.textContent=count;
-  }
-
-  // Only show alert if we know our name AND there are NEW valid challenges
-  if(!myName||myName.trim()==='') return;
-  // Valid = pending, p2 is me, AND challenger name is real (not blank)
-  const newChallenges=myPending.filter(d=>
-    !alertedDuels.has(d.id) &&
-    d.p1 && String(d.p1).trim()!=='' &&
-    d.wager
-  );
-  if(!newChallenges.length) return;
-
-  const items=document.getElementById('duel-alert-items');
-  if(!items)return;
-  items.innerHTML=newChallenges.map(d=>`
-    <div class="duel-alert-item" onclick="closeDuelAlert();showView('duel')">
-      <div class="dai-title">⚔ ${esc(d.p1)} hath challenged thee to a duel!</div>
-      <div class="dai-sub">Wager: ${d.wager} honour pts · Tap here to accept or decline</div>
-    </div>`).join('');
-  document.getElementById('duel-alert').classList.add('show');
+  if(!badge)return;
+  const count=myName&&mine.length?mine.length:active.length;
+  badge.style.display=count>0?'flex':'none';
+  badge.textContent=count;
 }
-
-function closeDuelAlert(){
-  // Remember which alerts were dismissed so they don't reappear
-  const myName=getMyName();
-  if(myName){
-    S.duels.filter(d=>d.status==='pending'&&normName(d.p2)===normName(myName))
-      .forEach(d=>alertedDuels.add(d.id));
-    localStorage.setItem('wt_alerted_duels',JSON.stringify([...alertedDuels]));
-  }
-  document.getElementById('duel-alert').classList.remove('show');
-}
-window.closeDuelAlert=closeDuelAlert;
 
 // ══ WELCOME BANNER ══
 function renderWelcome(){
@@ -349,6 +309,7 @@ function showView(v){
   if(v==='art'){renderArt();setupNameInput('art-name','art-sug',n=>{const h=S.playerHouses[normName(n)]||getMyHouse();if(h)document.getElementById('art-house').value=h;});}
   if(v==='riddles')renderRiddles();
   if(v==='bestdressed'){renderBestDressed();setupNameInput('bd-name','bd-sug',()=>{});}
+  if(v==='qr')renderQRPage();
   if(v==='maester'&&!adminUnlocked)showMaesterLogin();
   if(v==='maester'&&adminUnlocked)renderMaester();
 }
@@ -674,6 +635,42 @@ async function submitRiddleAnswer(rid){
   toast(`CORRECT! ${name} solves the riddle! ${RIDDLE_PTS} pts for House ${capFirst(house)}! 🏆`);
 }
 
+// ══ QR PAGE ══
+function renderQRPage(){
+  const base=window.location.href.split('?')[0].split('#')[0];
+  const stations=[
+    {label:'⚔ Standings',      desc:'Live house standings',        param:'view=scoreboard'},
+    {label:'👤 My Honour',     desc:'Check thy personal honour',   param:'view=personal'},
+    {label:'⚔ Duel Station',  desc:'Challenge a fellow warrior',  param:'view=duel'},
+    {label:'🏹 Archery Range', desc:'Submit thy shot result',      param:'view=archery'},
+    {label:'🔨 Nail Into Log', desc:'Record thy swing count',      param:'view=nail'},
+    {label:'🎨 Art Challenge', desc:'Submit thy masterpiece',      param:'view=art'},
+    {label:'🧠 Trials of Mind',desc:'Test thy wits',              param:'view=riddles'},
+    {label:'👑 Best Dressed',  desc:'Cast thy vote',               param:'view=bestdressed'},
+  ];
+  const grid=document.getElementById('qr-page-grid');
+  if(!grid)return;
+  grid.innerHTML='';
+  stations.forEach((s,i)=>{
+    const url=base+'?'+s.param;
+    const sid='qrp'+i;
+    const card=document.createElement('div');
+    card.className='parchment qr-card';
+    card.innerHTML=`<h3>${s.label}</h3><p>${s.desc}</p><div class="qr-wrap" id="${sid}"></div>`;
+    grid.appendChild(card);
+  });
+  setTimeout(()=>{
+    stations.forEach((s,i)=>{
+      const url=base+'?'+s.param;
+      const el=document.getElementById('qrp'+i);
+      if(!el||el.children.length>0)return;
+      try{
+        new window.QRCode(el,{text:url,width:110,height:110,colorDark:'#1a1208',colorLight:'#f2e8d0',correctLevel:window.QRCode.CorrectLevel.M});
+      }catch(e){console.warn('QR error',e);}
+    });
+  },100);
+}
+
 // ══ BEST DRESSED ══
 async function submitBestDressedVote(){
   if(submitting)return; submitting=true;
@@ -717,9 +714,6 @@ function maesterLogin(){
 }
 
 function renderMaester(){
-  // Clear and re-render QR grid fresh each time
-  const qrGrid = document.getElementById('maester-qr-grid');
-  if(qrGrid) qrGrid.innerHTML = '';
   document.getElementById('maester-team').innerHTML=TEAM_EVENTS.map(ev=>{
     const ranking=S.teamRankings[ev.id]||[null,null,null,null];
     return`<div class="admin-row"><div class="admin-ename">${ev.emoji} ${ev.name}</div>
@@ -742,7 +736,6 @@ function renderMaester(){
     :bdSorted.map(([name,votes],i)=>`<div class="lb-row"><div class="lb-rank">${i+1}.</div><div class="lb-name">${esc(name)}</div><div class="lb-pts">${votes} vote${votes>1?'s':''}</div></div>`).join('');
 
   document.getElementById('maester-art').innerHTML=S.art.length===0?'<div class="muted" style="padding:14px;text-align:center">No submissions yet</div>':S.art.map((a,i)=>{const avg=a.voteCount>0?(a.totalScore/a.voteCount).toFixed(2):'-';return`<div style="margin-bottom:12px;border:2px solid var(--border);border-radius:4px;overflow:hidden;background:var(--parchment)"><img src="${a.image}" style="width:100%;display:block;max-height:180px;object-fit:cover"/><div style="padding:8px 12px"><div style="font-weight:600;color:var(--ink);font-size:14px">#${i+1} — ${esc(a.submitterName)} · ${capFirst(a.submitterHouse||'?')}</div><div class="muted" style="font-size:11px">${a.voteCount||0} votes · Avg: ${avg} ⭐ · Scores: ${Object.values(a.votes||{}).join(', ')||'none'}</div><button class="btn-del" style="margin-top:6px" onclick="delEntry('art','${a.id}')">✕ Remove</button></div></div>`;}).join('');
-  renderQR();
 }
 
 async function setRank(eid,p,hid){const r=[...(S.teamRankings[eid]||[null,null,null,null])];const ex=r.indexOf(hid);if(ex!==-1)r[ex]=null;r[p]=r[p]===hid?null:hid;S.teamRankings[eid]=r;await fsSet('state/teamRankings',{[eid]:r});renderMaester();}
@@ -754,32 +747,8 @@ async function toggleHint(rid,val){await fsSet('state/riddles',{[rid]:{...(S.rid
 async function confirmReset(){showModal('Reset Tournament','This will wipe ALL scrolls — every score, duel and entry — for eternity. Art thou absolutely certain?','Wipe the Scrolls',async()=>{const cols=['archery','nail','duels','art'];for(const col of cols){const s=await getDocs(collection(db,col));for(const d of s.docs)await deleteDoc(d.ref);}await setDoc(doc(db,'state','teamRankings'),{});await setDoc(doc(db,'state','eggs'),{dragon:0,wolf:0,snake:0,lion:0});await setDoc(doc(db,'state','bonus'),{dragon:0,wolf:0,snake:0,lion:0});await setDoc(doc(db,'state','playerHouses'),{});await setDoc(doc(db,'state','riddles'),{});toast('The scrolls have been wiped clean');renderMaester();});}
 
 // ══ PUBLIC QR PAGE ══
-// publicQR removed — QR codes only in Grand Maester panel
 
-// ══ QR ══
-function renderQR(){
-  const base=window.location.href.split('?')[0].split('#')[0];
-  const stations=[
-    {label:'⚔ Standings',     desc:'Live house standings',       param:'view=scoreboard'},
-    {label:'👤 My Honour',    desc:'Check thy personal honour',  param:'view=personal'},
-    {label:'⚔ Duel Station', desc:'Challenge a fellow warrior', param:'view=duel'},
-    {label:'🏹 Archery Range',desc:'Submit thy shot result',     param:'view=archery'},
-    {label:'🔨 Nail Into Log',desc:'Record thy swing count',     param:'view=nail'},
-    {label:'🎨 Art Challenge',desc:'Submit thy masterpiece',     param:'view=art'},
-    {label:'🧠 Trials of Mind',desc:'Test thy wits',            param:'view=riddles'},
-  ];
-  const grid=document.getElementById('maester-qr-grid');if(!grid)return;
-  grid.innerHTML='';
-  stations.forEach(s=>{
-    const url=base+'?'+s.param;
-    const sid='qr_'+Math.random().toString(36).slice(2);
-    const card=document.createElement('div');
-    card.className='parchment qr-card';
-    card.innerHTML=`<h3>${s.label}</h3><p>${s.desc}</p><div class="qr-wrap" id="${sid}"></div>`;
-    grid.appendChild(card);
-    setTimeout(()=>{try{new QRCode(document.getElementById(sid),{text:url,width:110,height:110,colorDark:'#1a1208',colorLight:'#f2e8d0',correctLevel:QRCode.CorrectLevel.M});}catch(e){}},80);
-  });
-}
+
 
 // ══ UTILS ══
 function showLoading(on){document.getElementById('loading').style.display=on?'flex':'none';}
@@ -1040,48 +1009,6 @@ input[type=file]{display:none;}
 .page-title h1{font-family:'Cinzel',serif;font-size:18px;font-weight:900;color:var(--parchment);text-shadow:0 2px 8px rgba(0,0,0,0.8);letter-spacing:0.05em;line-height:1.25;}
 .page-title p{color:var(--gold2);font-style:italic;font-size:12px;margin-top:4px;}
 
-/* ── DUEL ALERT ── */
-.duel-alert{
-  position:fixed;
-  top:48px;
-  left:50%;
-  transform:translateX(-50%) translateY(-120%);
-  background:linear-gradient(160deg,#f5e6bf,#ead5a0);
-  border:2px solid var(--dragon);
-  border-radius:3px;
-  box-shadow:0 6px 24px rgba(0,0,0,0.7);
-  z-index:200;
-  min-width:280px;
-  max-width:360px;
-  transition:transform 0.35s cubic-bezier(0.34,1.56,0.64,1);
-  overflow:hidden;
-}
-.duel-alert.show{transform:translateX(-50%) translateY(0);}
-.duel-alert-header{
-  background:var(--dragon);
-  color:#fff;
-  font-family:'Cinzel',serif;
-  font-size:11px;
-  font-weight:700;
-  letter-spacing:0.08em;
-  padding:6px 12px;
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-}
-.duel-alert-close{cursor:pointer;opacity:0.8;font-size:14px;}
-.duel-alert-close:hover{opacity:1;}
-.duel-alert-item{
-  padding:8px 12px;
-  border-bottom:1px solid rgba(122,85,16,0.2);
-  cursor:pointer;
-  transition:background 0.1s;
-}
-.duel-alert-item:last-child{border-bottom:none;}
-.duel-alert-item:hover{background:rgba(122,85,16,0.1);}
-.duel-alert-item .dai-title{font-size:13px;font-weight:600;color:var(--ink);}
-.duel-alert-item .dai-sub{font-size:11px;font-style:italic;color:var(--ink-light);margin-top:1px;}
-
 /* ── LOADING ── */
 #loading{position:fixed;inset:0;background:rgba(8,3,1,0.92);display:flex;align-items:center;justify-content:center;z-index:9999;flex-direction:column;gap:14px;}
 #loading p{font-family:'Cinzel',serif;font-size:13px;color:var(--parchment);letter-spacing:0.1em;}
@@ -1124,6 +1051,7 @@ input[type=file]{display:none;}
   <button class="nav-btn" id="nav-art"      onclick="showView('art')">🎨 Art</button>
   <button class="nav-btn" id="nav-riddles"  onclick="showView('riddles')">🧠 Riddles</button>
   <button class="nav-btn" id="nav-bestdressed" onclick="showView('bestdressed')">👑 Best Dressed</button>
+  <button class="nav-btn" id="nav-qr" onclick="showView('qr')">📋 QR Codes</button>
   <button class="nav-btn" id="nav-maester"  onclick="showView('maester')">📜 Grand Maester</button>
 </nav>
 
@@ -1262,6 +1190,14 @@ input[type=file]{display:none;}
   </div>
 </div>
 
+<!-- ══ QR CODES ══ -->
+<div id="view-qr" class="view">
+  <div class="content">
+    <div class="page-title"><h1>📋 Station Scrolls</h1><p>Screenshot each card · print at thy stations</p></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px" id="qr-page-grid"></div>
+  </div>
+</div>
+
 <!-- ══ BEST DRESSED ══ -->
 <div id="view-bestdressed" class="view">
   <div class="content">
@@ -1324,7 +1260,7 @@ input[type=file]{display:none;}
       <div class="parchment"><div class="section-title">🏹 Archery Entries</div><div id="maester-arch"></div></div>
       <div class="parchment"><div class="section-title">🔨 Nail Log Entries</div><div id="maester-nail"></div></div>
       <div class="parchment"><div class="section-title">⚔ All Duels</div><div id="maester-duels"></div></div>
-      <div class="parchment"><div class="section-title">📋 Station QR Codes</div><div style="padding:10px"><div class="qr-grid" id="maester-qr-grid"></div></div></div>
+
       <div class="parchment"><div class="section-title">⚠ Danger Zone</div><div class="admin-row"><button class="btn-danger" onclick="confirmReset()">Wipe All Scrolls — Reset Tournament</button></div></div>
     </div>
   </div>
@@ -1353,15 +1289,6 @@ input[type=file]{display:none;}
   <div style="font-family:'Cinzel',serif;font-size:11px;color:#c8941a;letter-spacing:0.12em;text-transform:uppercase;margin-top:4px">Tap to Enter the Realm</div>
   <div style="width:60px;height:1px;background:linear-gradient(90deg,transparent,#c8941a,transparent)"></div>
   <div style="font-family:'Crimson Text',serif;font-size:13px;color:rgba(230,210,150,0.5);font-style:italic">21st Birthday · House Championship</div>
-</div>
-
-<!-- DUEL ALERT DROPDOWN -->
-<div class="duel-alert" id="duel-alert">
-  <div class="duel-alert-header">
-    ⚔ Thou Hast Been Challenged!
-    <span class="duel-alert-close" onclick="closeDuelAlert()">✕</span>
-  </div>
-  <div id="duel-alert-items"></div>
 </div>
 
 <div id="loading"><div class="spinner"></div><p>The Scrolls Are Being Fetched...</p></div>

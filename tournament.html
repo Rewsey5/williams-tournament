@@ -217,33 +217,48 @@ function setupNameInput(inputId,sugId,onPick){
 }
 
 // ══ DUEL BADGE + ALERT ══
+// Track which duel IDs we've already alerted so we don't re-show dismissed ones
+const alertedDuels = new Set(JSON.parse(localStorage.getItem('wt_alerted_duels')||'[]'));
+
 function updateDuelBadge(){
   const myName=getMyName();
-  // Pending duels where I am the challenged person (p2)
-  const myPending=myName?S.duels.filter(d=>d.status==='pending'&&normName(d.p2)===normName(myName)):[];
-  // All active duels for badge count
+
+  // Only show personal badge if we know who we are
+  const myPending=myName
+    ? S.duels.filter(d=>d.status==='pending'&&normName(d.p2)===normName(myName))
+    : [];
   const allActive=S.duels.filter(d=>d.status==='pending'||d.status==='awaiting');
+
   const badge=document.getElementById('duel-badge');
   if(badge){
     const count=myName?myPending.length:allActive.length;
     badge.style.display=count>0?'flex':'none';
     badge.textContent=count;
   }
-  // Show dropdown alert for personal pending challenges
-  if(myName&&myPending.length>0){
-    const items=document.getElementById('duel-alert-items');
-    if(items){
-      items.innerHTML=myPending.map(d=>`
-        <div class="duel-alert-item" onclick="closeDuelAlert();showView('duel')">
-          <div class="dai-title">⚔ ${esc(d.p1)} challenges thee!</div>
-          <div class="dai-sub">Wager: ${d.wager} honour pts · Tap to accept or decline</div>
-        </div>`).join('');
-      document.getElementById('duel-alert').classList.add('show');
-    }
-  }
+
+  // Only show alert if we know our name AND there are new pending challenges for us
+  if(!myName||!myPending.length) return;
+  const newChallenges=myPending.filter(d=>!alertedDuels.has(d.id));
+  if(!newChallenges.length) return;
+
+  const items=document.getElementById('duel-alert-items');
+  if(!items)return;
+  items.innerHTML=newChallenges.map(d=>`
+    <div class="duel-alert-item" onclick="closeDuelAlert();showView('duel')">
+      <div class="dai-title">⚔ ${esc(d.p1)} hath challenged thee to a duel!</div>
+      <div class="dai-sub">Wager: ${d.wager} honour pts · Tap here to accept or decline</div>
+    </div>`).join('');
+  document.getElementById('duel-alert').classList.add('show');
 }
 
 function closeDuelAlert(){
+  // Remember which alerts were dismissed so they don't reappear
+  const myName=getMyName();
+  if(myName){
+    S.duels.filter(d=>d.status==='pending'&&normName(d.p2)===normName(myName))
+      .forEach(d=>alertedDuels.add(d.id));
+    localStorage.setItem('wt_alerted_duels',JSON.stringify([...alertedDuels]));
+  }
   document.getElementById('duel-alert').classList.remove('show');
 }
 window.closeDuelAlert=closeDuelAlert;
@@ -312,7 +327,6 @@ function showView(v){
   if(v==='art'){renderArt();setupNameInput('art-name','art-sug',n=>{const h=S.playerHouses[normName(n)]||getMyHouse();if(h)document.getElementById('art-house').value=h;});}
   if(v==='riddles')renderRiddles();
   if(v==='bestdressed'){renderBestDressed();setupNameInput('bd-name','bd-sug',()=>{});}
-  if(v==='qrcodes')renderPublicQR();
   if(v==='maester'&&!adminUnlocked)showMaesterLogin();
   if(v==='maester'&&adminUnlocked)renderMaester();
 }
@@ -681,6 +695,9 @@ function maesterLogin(){
 }
 
 function renderMaester(){
+  // Clear and re-render QR grid fresh each time
+  const qrGrid = document.getElementById('maester-qr-grid');
+  if(qrGrid) qrGrid.innerHTML = '';
   document.getElementById('maester-team').innerHTML=TEAM_EVENTS.map(ev=>{
     const ranking=S.teamRankings[ev.id]||[null,null,null,null];
     return`<div class="admin-row"><div class="admin-ename">${ev.emoji} ${ev.name}</div>
@@ -791,8 +808,7 @@ renderWelcome();
 updateDuelBadge();
 handleParams();
 if(currentView==='scoreboard')renderScoreboard();
-// Pre-render QR codes
-setTimeout(()=>renderPublicQR(),500);
+
 
 document.addEventListener('click',e=>{if(!e.target.closest('.input-wrap'))document.querySelectorAll('.suggestions').forEach(s=>s.style.display='none');});
 </script>
@@ -1109,7 +1125,6 @@ input[type=file]{display:none;}
   <button class="nav-btn" id="nav-art"      onclick="showView('art')">🎨 Art</button>
   <button class="nav-btn" id="nav-riddles"  onclick="showView('riddles')">🧠 Riddles</button>
   <button class="nav-btn" id="nav-bestdressed" onclick="showView('bestdressed')">👑 Best Dressed</button>
-  <button class="nav-btn" id="nav-qrcodes" onclick="showView('qrcodes')">📋 QR Codes</button>
   <button class="nav-btn" id="nav-maester"  onclick="showView('maester')">📜 Grand Maester</button>
 </nav>
 
@@ -1245,14 +1260,6 @@ input[type=file]{display:none;}
   <div class="content">
     <div class="page-title"><h1>🧠 Trials of the Mind</h1><p>Prove thy wisdom · First to answer earns glory for thy house</p></div>
     <div id="riddle-list"></div>
-  </div>
-</div>
-
-<!-- ══ QR CODES ══ -->
-<div id="view-qrcodes" class="view">
-  <div class="content">
-    <div class="page-title"><h1>📋 Station Scrolls</h1><p>Screenshot each card · print at thy stations</p></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px" id="public-qr-grid"></div>
   </div>
 </div>
 

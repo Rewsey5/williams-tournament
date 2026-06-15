@@ -150,16 +150,65 @@ async function loadAll(){
 }
 
 function startListeners(){
-  onSnapshot(collection(db,'archery'),s=>{ S.archery=s.docs.map(d=>({id:d.id,...d.data()})); if(currentView==='scoreboard')renderScoreboard(); if(currentView==='archery')renderArcheryBoard(); updateDuelBadge(); });
-  onSnapshot(collection(db,'nail'),s=>{ S.nail=s.docs.map(d=>({id:d.id,...d.data()})); if(currentView==='scoreboard')renderScoreboard(); if(currentView==='nail')renderNailBoard(); });
-  onSnapshot(collection(db,'duels'),s=>{ S.duels=s.docs.map(d=>({id:d.id,...d.data()})); if(currentView==='duel')renderDuels(); updateDuelBadge(); });
-  onSnapshot(collection(db,'art'),s=>{ S.art=s.docs.map(d=>({id:d.id,...d.data()})); if(currentView==='art')renderArt(); if(adminUnlocked&&currentView==='maester')renderMaester(); });
-  onSnapshot(doc(db,'state','teamRankings'),s=>{ if(s.exists())S.teamRankings=s.data(); if(currentView==='scoreboard')renderScoreboard(); });
-  onSnapshot(doc(db,'state','eggs'),s=>{ if(s.exists())S.eggs=s.data(); if(currentView==='scoreboard')renderScoreboard(); });
-  onSnapshot(doc(db,'state','bonus'),s=>{ if(s.exists())S.bonus=s.data(); if(currentView==='scoreboard')renderScoreboard(); });
-  onSnapshot(doc(db,'state','playerHouses'),s=>{ if(s.exists())S.playerHouses=s.data(); });
-  onSnapshot(doc(db,'state','riddles'),s=>{ if(s.exists())S.riddles=s.data(); if(currentView==='riddles')renderRiddles(); if(adminUnlocked&&currentView==='maester')renderMaester(); });
-  onSnapshot(collection(db,'bestDressed'),s=>{ S.bestDressed=s.docs.map(d=>({id:d.id,...d.data()})); if(adminUnlocked&&currentView==='maester')renderMaester(); });
+  // ── REAL-TIME: Duels only (time sensitive) ──
+  onSnapshot(collection(db,'duels'),s=>{
+    S.duels=s.docs.map(d=>({id:d.id,...d.data()}));
+    if(currentView==='duel')renderDuels();
+    updateDuelBadge();
+  });
+
+  // ── ON VISIBILITY: Refresh all data when user returns to app ──
+  document.addEventListener('visibilitychange',()=>{
+    if(document.visibilityState==='visible') refreshAllData();
+  });
+
+  // ── POLL: Every 60s as backup (only if tab is visible) ──
+  setInterval(()=>{
+    if(document.visibilityState==='visible') refreshAllData();
+  }, 60000);
+}
+
+// Fetch all non-duel data in one batch — with cooldown to prevent read spam
+let lastRefresh = 0;
+const REFRESH_COOLDOWN = 20000; // 20 seconds minimum between refreshes
+async function refreshAllData(force){
+  const now = Date.now();
+  if(!force && (now - lastRefresh) < REFRESH_COOLDOWN) return;
+  lastRefresh = now;
+  try {
+    const [ar,na,art,bd,rankings,eggs,bonus,houses,ridst] = await Promise.all([
+      fsGetAll('archery'),
+      fsGetAll('nail'),
+      fsGetAll('art'),
+      fsGetAll('bestDressed'),
+      getDoc(doc(db,'state','teamRankings')),
+      getDoc(doc(db,'state','eggs')),
+      getDoc(doc(db,'state','bonus')),
+      getDoc(doc(db,'state','playerHouses')),
+      getDoc(doc(db,'state','riddles')),
+    ]);
+    S.archery=ar;
+    S.nail=na;
+    S.art=art;
+    S.bestDressed=bd;
+    if(rankings.exists()) S.teamRankings=rankings.data();
+    if(eggs.exists()) S.eggs=eggs.data();
+    if(bonus.exists()) S.bonus=bonus.data();
+    if(houses.exists()) S.playerHouses=houses.data();
+    if(ridst.exists()) S.riddles=ridst.data();
+
+    // Re-render current view
+    if(currentView==='scoreboard') renderScoreboard();
+    if(currentView==='archery') renderArcheryBoard();
+    if(currentView==='nail') renderNailBoard();
+    if(currentView==='art') renderArt();
+    if(currentView==='riddles') renderRiddles();
+    if(currentView==='personal'){
+      const name=document.getElementById('personal-name')?.value?.trim();
+      if(name) lookupPersonal();
+    }
+    if(adminUnlocked&&currentView==='maester') renderMaester();
+  } catch(e){ console.warn('Refresh error:',e); }
 }
 
 // ══ POINTS ══
@@ -301,6 +350,8 @@ function showView(v){
   const el=document.getElementById('view-'+v);if(el)el.classList.add('active');
   const nb=document.getElementById('nav-'+v);if(nb)nb.classList.add('active');
   renderWelcome();
+  // Refresh data on tab switch (cooldown prevents spam; duel is real-time, qr/maester don't need it)
+  if(!['duel','qr','maester'].includes(v)) refreshAllData();
   if(v==='scoreboard')renderScoreboard();
   if(v==='archery'){renderArcheryBoard();setupNameInput('arch-name','arch-sug',n=>{const h=S.playerHouses[normName(n)]||getMyHouse();if(h)setArchHouse(h);});}
   if(v==='nail'){renderNailBoard();setupNameInput('nail-name','nail-sug',n=>{const h=S.playerHouses[normName(n)]||getMyHouse();if(h)setNailHouse(h);});}
@@ -376,6 +427,7 @@ async function submitArchery(){
   await fsSet('state/playerHouses',{[normName(name)]:archSelHouse});
   await fsAdd('archery',{name,house:archSelHouse,score:archSelScore});
   rememberMe(name,archSelHouse);
+  refreshAllData(true);
   playSound('bow'); haptic(30);
   if(archSelScore===3)fireConfetti();
   const lbl=archSelScore===3?'BULLSEYE! 🎯':archSelScore===2?'First ring! ⭕':'Hit! 🏹';
@@ -412,6 +464,7 @@ async function submitNail(){
   await fsSet('state/playerHouses',{[normName(name)]:nailSelHouse});
   await fsAdd('nail',{name,house:nailSelHouse,swings});
   rememberMe(name,nailSelHouse);
+  refreshAllData(true);
   playSound('hammer'); haptic([50,10,20]);
   if(swings<5)fireConfetti();
   const pts=Math.max(0,10-swings);
@@ -671,6 +724,16 @@ function renderQRPage(){
   },100);
 }
 
+// ══ COLLAPSIBLE SECTIONS ══
+function toggleSection(id){
+  const body=document.getElementById(id);
+  const header=body?.previousElementSibling;
+  if(!body||!header)return;
+  body.classList.toggle('open');
+  header.classList.toggle('open');
+}
+window.toggleSection=toggleSection;
+
 // ══ BEST DRESSED ══
 async function submitBestDressedVote(){
   if(submitting)return; submitting=true;
@@ -729,17 +792,18 @@ function renderMaester(){
   document.getElementById('maester-riddles').innerHTML=RIDDLES.map(r=>{const rd=S.riddles[r.id]||{};return`<div class="admin-row"><div class="admin-ename" style="font-size:11px;margin-bottom:4px">${r.q.slice(0,55)}...</div><div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center"><button class="btn-sm ${rd.released?'':'btn-green'}" onclick="toggleRiddle('${r.id}',${!rd.released})">${rd.released?'🔒 Lock':'🔓 Release'}</button><button class="btn-sm" onclick="toggleHint('${r.id}',${!rd.hintRevealed})">${rd.hintRevealed?'Hide Hint':'💡 Hint'}</button>${rd.solved?`<span class="muted" style="font-size:11px">✅ ${esc(rd.winnerName)}</span>`:'<span class="muted" style="font-size:11px">Unsolved</span>'}</div></div>`;}).join('');
   // Best dressed results
   const bdTally={};
-  (S.bestDressed||[]).forEach(v=>{bdTally[v.name]=(bdTally[v.name]||0)+1;});
+  (S.bestDressed||[]).forEach(v=>{ if(v.name) bdTally[v.name]=(bdTally[v.name]||0)+1; });
   const bdSorted=Object.entries(bdTally).sort((a,b)=>b[1]-a[1]);
-  document.getElementById('maester-bestdressed').innerHTML=bdSorted.length===0
-    ?'<div class="muted" style="padding:14px;text-align:center">No votes yet</div>'
-    :bdSorted.map(([name,votes],i)=>`<div class="lb-row"><div class="lb-rank">${i+1}.</div><div class="lb-name">${esc(name)}</div><div class="lb-pts">${votes} vote${votes>1?'s':''}</div></div>`).join('');
+  const bdEl=document.getElementById('maester-bestdressed');
+  if(bdEl) bdEl.innerHTML=bdSorted.length===0
+    ?'<div class="muted" style="padding:14px;text-align:center">No votes yet — the realm has not spoken</div>'
+    :bdSorted.map(([name,votes],i)=>`<div class="lb-row"><div class="lb-rank">${i+1}.</div><div class="lb-name" style="color:var(--ink)">${esc(name)}</div><div class="lb-pts" style="color:${i===0?'var(--lion)':'var(--ink)'}">${votes} vote${votes>1?'s':''}${i===0?' 👑':''}</div></div>`).join('');
 
   document.getElementById('maester-art').innerHTML=S.art.length===0?'<div class="muted" style="padding:14px;text-align:center">No submissions yet</div>':S.art.map((a,i)=>{const avg=a.voteCount>0?(a.totalScore/a.voteCount).toFixed(2):'-';return`<div style="margin-bottom:12px;border:2px solid var(--border);border-radius:4px;overflow:hidden;background:var(--parchment)"><img src="${a.image}" style="width:100%;display:block;max-height:180px;object-fit:cover"/><div style="padding:8px 12px"><div style="font-weight:600;color:var(--ink);font-size:14px">#${i+1} — ${esc(a.submitterName)} · ${capFirst(a.submitterHouse||'?')}</div><div class="muted" style="font-size:11px">${a.voteCount||0} votes · Avg: ${avg} ⭐ · Scores: ${Object.values(a.votes||{}).join(', ')||'none'}</div><button class="btn-del" style="margin-top:6px" onclick="delEntry('art','${a.id}')">✕ Remove</button></div></div>`;}).join('');
 }
 
 async function setRank(eid,p,hid){const r=[...(S.teamRankings[eid]||[null,null,null,null])];const ex=r.indexOf(hid);if(ex!==-1)r[ex]=null;r[p]=r[p]===hid?null:hid;S.teamRankings[eid]=r;await fsSet('state/teamRankings',{[eid]:r});renderMaester();}
-async function addEggs(){const h=document.getElementById('egg-house').value;const n=parseInt(document.getElementById('egg-count').value);if(isNaN(n)||n<1){toast('Enter egg count');return;}S.eggs[h]=(S.eggs[h]||0)+n;await fsSet('state/eggs',{[h]:S.eggs[h]});toast(`+${n} egg(s) for House ${capFirst(h)}! 🥚`);renderMaester();}
+async function addEggs(){const h=document.getElementById('egg-house').value;const n=parseInt(document.getElementById('egg-count').value);if(isNaN(n)||n<1){toast('Enter egg count');return;}S.eggs[h]=(S.eggs[h]||0)+n;await fsSet('state/eggs',{[h]:S.eggs[h]});toast(`+${n} egg(s) for House ${capFirst(h)}! 🥚`);renderMaester();refreshAllData(true);}
 async function addBonus(){const h=document.getElementById('bonus-house').value;const p=parseInt(document.getElementById('bonus-pts').value);if(isNaN(p)){toast('Enter points');return;}S.bonus[h]=(S.bonus[h]||0)+p;await fsSet('state/bonus',{[h]:S.bonus[h]});toast(`${p>0?'+':''}${p} pts to House ${capFirst(h)}`);}
 async function delEntry(col,id){showModal('Remove Entry','Art thou certain this entry should be struck from the scrolls?','Remove It',async()=>{await fsDel(col,id);toast('Entry struck from the record');if(adminUnlocked)renderMaester();});}
 async function toggleRiddle(rid,val){await fsSet('state/riddles',{[rid]:{...(S.riddles[rid]||{}),released:val}});renderMaester();toast(val?'Riddle released to the realm!':'Riddle sealed');}
@@ -1003,6 +1067,49 @@ input[type=file]{display:none;}
 /* ── CONFETTI ── */
 .confetti-piece{position:fixed;top:-20px;border-radius:2px;animation:cfall linear forwards;z-index:1000;pointer-events:none;}
 @keyframes cfall{0%{transform:translateY(0) rotate(0deg);opacity:1;}85%{opacity:1;}100%{transform:translateY(105vh) rotate(800deg);opacity:0;}}
+
+/* ── COLLAPSIBLE MAESTER SECTIONS ── */
+.collapse-header{
+  cursor:pointer;
+  user-select:none;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:10px 14px 8px;
+  position:relative;
+  z-index:2;
+}
+.collapse-header:hover{background:rgba(122,85,16,0.06);}
+.collapse-header .ch-title{
+  font-family:'Cinzel',serif;
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:0.1em;
+  text-transform:uppercase;
+  color:var(--border);
+}
+.collapse-header .ch-arrow{
+  font-size:10px;
+  color:var(--border);
+  transition:transform 0.2s;
+  flex-shrink:0;
+}
+.collapse-header.open .ch-arrow{transform:rotate(180deg);}
+.collapse-header::after{
+  content:'';
+  display:block;
+  position:absolute;
+  bottom:0;left:14px;right:14px;
+  height:1px;
+  background:linear-gradient(90deg,transparent,var(--border),transparent);
+  opacity:0.4;
+}
+.collapse-body{
+  display:none;
+  position:relative;
+  z-index:2;
+}
+.collapse-body.open{display:block;}
 
 /* ── PAGE TITLES ── */
 .page-title{text-align:center;margin-bottom:14px;}

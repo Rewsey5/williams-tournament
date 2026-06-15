@@ -43,6 +43,10 @@ const SFX = {
   hammer: new Audio('hammer.wav'),
   bow:    new Audio('bow.mp3'),
 };
+// Preload on page ready
+window.addEventListener('load', () => {
+  Object.values(SFX).forEach(s => { s.preload = 'auto'; s.load(); });
+});
 function playSound(k){ try{ const s=SFX[k]; if(s){s.currentTime=0;s.volume=0.8;s.play().catch(()=>{});} }catch(e){} }
 function haptic(p){ try{ if(navigator.vibrate) navigator.vibrate(p); }catch(e){} }
 
@@ -50,10 +54,10 @@ function haptic(p){ try{ if(navigator.vibrate) navigator.vibrate(p); }catch(e){}
 const GUESTS = ["Will","Rachel","Leigh","Charlie","Lanni","Tim","Anastashia","Tay","Ellen","Di","Steve","Sarah","Jack","Alex McDonald","Masia","Ollie","Liam","Siobhan","Xavier","Tamrin","Ryan","Sienna","Seb","Charlotte","Angus","Bec","Morgan","Maddy Brown","Maddy","Alex Broussard","Pat","Caitlin","Aaron","Kitty","Mim","Eska","Jojo","Rich","Ivy","Tilly","Henry","Paul Smith","Holly","Sophie","Eddy","Mike","Teresa","Emily","Kane","James","Dianna","Josh","Kelly","Noah","Len","Karen","Dianne Anderson","Pete","David","Kate","Tamara","Dave","Francis","Maeve","Zozo","Stephen McDonald","Steven Rewse-Bongers","Lilian","Eleanor","Harriet","Amber","Ducky","Patrice","Sam","Clara","Mitch","Grace","Alfie","Ewan","Paul Harrison","Dianne McDonald"];
 
 const HOUSES = [
-  {id:'dragon',name:'Dragon',emoji:'🐉',color:'#c0392b',img:'crest-dragon.png'},
-  {id:'wolf',  name:'Wolf',  emoji:'🐺',color:'#2471a3',img:'crest-wolf.png'},
-  {id:'snake', name:'Snake', emoji:'🐍',color:'#1e8449',img:'crest-snake.png'},
-  {id:'lion',  name:'Lion',  emoji:'🦁',color:'#b7770d',img:'crest-lion.png'},
+  {id:'dragon',name:'Dragon',emoji:'🐉',color:'#c0392b',img:'house_dragon_transparent.png'},
+  {id:'wolf',  name:'Wolf',  emoji:'🐺',color:'#2471a3',img:'house_wolf_transparent.png'},
+  {id:'snake', name:'Snake', emoji:'🐍',color:'#1e8449',img:'house_snake_transparent.png'},
+  {id:'lion',  name:'Lion',  emoji:'🦁',color:'#b7770d',img:'house_lion_transparent.png'},
 ];
 
 const TEAM_EVENTS = [
@@ -102,18 +106,18 @@ async function fsGetAll(col){ const s=await getDocs(collection(db,col)); return 
 async function loadAll(){
   showLoading(true);
   try {
-    const [r,e,b,h,rd,ar,na,du,art]=await Promise.all([
+    const [r,e,b,h,rd,ar,na,du,art,bd]=await Promise.all([
       getDoc(doc(db,'state','teamRankings')),getDoc(doc(db,'state','eggs')),
       getDoc(doc(db,'state','bonus')),getDoc(doc(db,'state','playerHouses')),
       getDoc(doc(db,'state','riddles')),
-      fsGetAll('archery'),fsGetAll('nail'),fsGetAll('duels'),fsGetAll('art'),
+      fsGetAll('archery'),fsGetAll('nail'),fsGetAll('duels'),fsGetAll('art'),fsGetAll('bestDressed'),
     ]);
     S.teamRankings=r.exists()?r.data():{};
     S.eggs=e.exists()?e.data():{dragon:0,wolf:0,snake:0,lion:0};
     S.bonus=b.exists()?b.data():{dragon:0,wolf:0,snake:0,lion:0};
     S.playerHouses=h.exists()?h.data():{};
     S.riddles=rd.exists()?rd.data():{};
-    S.archery=ar; S.nail=na; S.duels=du; S.art=art;
+    S.archery=ar; S.nail=na; S.duels=du; S.art=art; S.bestDressed=bd;
   } catch(e){ toast('Scrolls unreachable — check thy connection'); }
   showLoading(false);
 }
@@ -128,6 +132,7 @@ function startListeners(){
   onSnapshot(doc(db,'state','bonus'),s=>{ if(s.exists())S.bonus=s.data(); if(currentView==='scoreboard')renderScoreboard(); });
   onSnapshot(doc(db,'state','playerHouses'),s=>{ if(s.exists())S.playerHouses=s.data(); });
   onSnapshot(doc(db,'state','riddles'),s=>{ if(s.exists())S.riddles=s.data(); if(currentView==='riddles')renderRiddles(); if(adminUnlocked&&currentView==='maester')renderMaester(); });
+  onSnapshot(collection(db,'bestDressed'),s=>{ S.bestDressed=s.docs.map(d=>({id:d.id,...d.data()})); if(adminUnlocked&&currentView==='maester')renderMaester(); });
 }
 
 // ══ POINTS ══
@@ -274,6 +279,7 @@ function showView(v){
   if(v==='personal'){setupNameInput('personal-name','personal-sug',()=>{});autoLoadPersonal();}
   if(v==='art'){renderArt();setupNameInput('art-name','art-sug',n=>{const h=S.playerHouses[normName(n)]||getMyHouse();if(h)document.getElementById('art-house').value=h;});}
   if(v==='riddles')renderRiddles();
+  if(v==='bestdressed'){renderBestDressed();setupNameInput('bd-name','bd-sug',()=>{});}
   if(v==='maester'&&!adminUnlocked)showMaesterLogin();
   if(v==='maester'&&adminUnlocked)renderMaester();
 }
@@ -317,9 +323,9 @@ function renderScoreboard(){
   const sums=houseSumPersonal();
   const sumRanked=HOUSES.slice().sort((a,b)=>(sums[b.id]||0)-(sums[a.id]||0));
   document.getElementById('sb-personal-sums').innerHTML=sumRanked.map(h=>`
-    <div class="lb-row">
-      <div class="dot" style="background:${h.color}"></div>
-      <div class="lb-name">${h.emoji} House ${h.name}</div>
+    <div class="lb-row" style="background:transparent">
+      <div class="dot" style="background:${h.color};flex-shrink:0"></div>
+      <div class="lb-name" style="color:var(--ink)">${h.emoji} House ${h.name}</div>
       <div class="lb-pts" style="color:${h.color}">${sums[h.id]||0} pts</div>
     </div>`).join('');
 }
@@ -599,6 +605,41 @@ async function submitRiddleAnswer(rid){
   toast(`CORRECT! ${name} solves the riddle! ${RIDDLE_PTS} pts for House ${capFirst(house)}! 🏆`);
 }
 
+// ══ BEST DRESSED ══
+async function submitBestDressedVote(){
+  if(submitting)return; submitting=true;
+  const btn=document.getElementById('bd-submit-btn'); btn.disabled=true;
+  const name=document.getElementById('bd-name').value.trim();
+  if(!name){toast('Name a warrior!');submitting=false;btn.disabled=false;return;}
+  // One vote per device
+  const did=getDeviceId();
+  const existing=S.bestDressed?S.bestDressed.find(v=>v.deviceId===did):null;
+  if(existing){toast('Thou hast already cast thy vote!');submitting=false;btn.disabled=false;return;}
+  await fsAdd('bestDressed',{name,deviceId:did});
+  rememberMe(getMyName()||name, getMyHouse());
+  document.getElementById('bd-form').style.display='none';
+  document.getElementById('bd-success').style.display='block';
+  submitting=false;
+}
+
+function resetBestDressed(){
+  document.getElementById('bd-form').style.display='';
+  document.getElementById('bd-success').style.display='none';
+  document.getElementById('bd-submit-btn').disabled=false;
+  document.getElementById('bd-name').value='';
+}
+
+function renderBestDressed(){
+  // Just show the submission form — results hidden
+  const did=getDeviceId();
+  const myVote=S.bestDressed?S.bestDressed.find(v=>v.deviceId===did):null;
+  if(myVote){
+    document.getElementById('bd-form').style.display='none';
+    document.getElementById('bd-success').style.display='block';
+    document.getElementById('bd-voted-name').textContent=myVote.name;
+  }
+}
+
 // ══ MAESTER ══
 function showMaesterLogin(){document.getElementById('maester-login').style.display='';document.getElementById('maester-panel').style.display='none';}
 function maesterLogin(){
@@ -620,6 +661,14 @@ function renderMaester(){
   document.getElementById('maester-nail').innerHTML=S.nail.length===0?'<div class="muted" style="padding:10px 14px">No entries</div>':S.nail.map(n=>`<div class="lb-row"><div class="lb-name">${esc(n.name)}<div class="lb-sub">${capFirst(n.house)} · ${n.swings} swings · ${Math.max(0,10-n.swings)}pts</div></div><button class="btn-del" onclick="delEntry('nail','${n.id}')">✕</button></div>`).join('');
   document.getElementById('maester-duels').innerHTML=S.duels.length===0?'<div class="muted" style="padding:10px 14px">No duels</div>':S.duels.slice().reverse().map(d=>`<div class="lb-row"><div class="lb-name">${esc(d.p1)} vs ${esc(d.p2)}<div class="lb-sub">Wager: ${d.wager}pts · ${d.status}${d.winner?' · Winner: '+esc(d.winner):''}</div></div><button class="btn-del" onclick="delEntry('duels','${d.id}')">✕</button></div>`).join('');
   document.getElementById('maester-riddles').innerHTML=RIDDLES.map(r=>{const rd=S.riddles[r.id]||{};return`<div class="admin-row"><div class="admin-ename" style="font-size:11px;margin-bottom:4px">${r.q.slice(0,55)}...</div><div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center"><button class="btn-sm ${rd.released?'':'btn-green'}" onclick="toggleRiddle('${r.id}',${!rd.released})">${rd.released?'🔒 Lock':'🔓 Release'}</button><button class="btn-sm" onclick="toggleHint('${r.id}',${!rd.hintRevealed})">${rd.hintRevealed?'Hide Hint':'💡 Hint'}</button>${rd.solved?`<span class="muted" style="font-size:11px">✅ ${esc(rd.winnerName)}</span>`:'<span class="muted" style="font-size:11px">Unsolved</span>'}</div></div>`;}).join('');
+  // Best dressed results
+  const bdTally={};
+  (S.bestDressed||[]).forEach(v=>{bdTally[v.name]=(bdTally[v.name]||0)+1;});
+  const bdSorted=Object.entries(bdTally).sort((a,b)=>b[1]-a[1]);
+  document.getElementById('maester-bestdressed').innerHTML=bdSorted.length===0
+    ?'<div class="muted" style="padding:14px;text-align:center">No votes yet</div>'
+    :bdSorted.map(([name,votes],i)=>`<div class="lb-row"><div class="lb-rank">${i+1}.</div><div class="lb-name">${esc(name)}</div><div class="lb-pts">${votes} vote${votes>1?'s':''}</div></div>`).join('');
+
   document.getElementById('maester-art').innerHTML=S.art.length===0?'<div class="muted" style="padding:14px;text-align:center">No submissions yet</div>':S.art.map((a,i)=>{const avg=a.voteCount>0?(a.totalScore/a.voteCount).toFixed(2):'-';return`<div style="margin-bottom:12px;border:2px solid var(--border);border-radius:4px;overflow:hidden;background:var(--parchment)"><img src="${a.image}" style="width:100%;display:block;max-height:180px;object-fit:cover"/><div style="padding:8px 12px"><div style="font-weight:600;color:var(--ink);font-size:14px">#${i+1} — ${esc(a.submitterName)} · ${capFirst(a.submitterHouse||'?')}</div><div class="muted" style="font-size:11px">${a.voteCount||0} votes · Avg: ${avg} ⭐ · Scores: ${Object.values(a.votes||{}).join(', ')||'none'}</div><button class="btn-del" style="margin-top:6px" onclick="delEntry('art','${a.id}')">✕ Remove</button></div></div>`;}).join('');
   renderQR();
 }
@@ -673,6 +722,7 @@ window.issueDuel=issueDuel;window.confirmDuel=confirmDuel;window.declineDuel=dec
 window.lookupPersonal=lookupPersonal;
 window.submitArt=submitArt;window.resetArt=resetArt;window.rateArt=rateArt;
 window.renderRiddles=renderRiddles;window.submitRiddleAnswer=submitRiddleAnswer;window.riddleNameInput=riddleNameInput;
+window.submitBestDressedVote=submitBestDressedVote; window.resetBestDressed=resetBestDressed;
 window.maesterLogin=maesterLogin;window.setRank=setRank;window.addEggs=addEggs;window.addBonus=addBonus;window.delEntry=delEntry;window.toggleRiddle=toggleRiddle;window.toggleHint=toggleHint;window.confirmReset=confirmReset;
 window.hideModal=hideModal;
 
@@ -748,8 +798,8 @@ nav{position:sticky;top:0;z-index:100;background:linear-gradient(180deg,#0d0703,
 .house-card.wolf{border-color:var(--wolf);background:linear-gradient(160deg,#010c1a,#000810);}
 .house-card.snake{border-color:var(--snake);background:linear-gradient(160deg,#011408,#000d04);}
 .house-card.lion{border-color:var(--lion);background:linear-gradient(160deg,#1a0e00,#0d0800);}
-.house-crest-img{width:58px;height:58px;object-fit:contain;display:block;margin:0 auto 6px;mix-blend-mode:multiply;}
-.welcome-crest{mix-blend-mode:multiply;}
+.house-crest-img{width:58px;height:58px;object-fit:contain;display:block;margin:0 auto 6px;}
+.welcome-crest{width:46px;height:46px;object-fit:contain;flex-shrink:0;}
 .h-name{font-family:'Cinzel',serif;font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:4px;}
 .house-card.dragon .h-name,.house-card.dragon .h-pts{color:#d4423a;}
 .house-card.wolf   .h-name,.house-card.wolf   .h-pts{color:#3a7abf;}
@@ -807,9 +857,9 @@ nav{position:sticky;top:0;z-index:100;background:linear-gradient(180deg,#0d0703,
 .lb-pts{font-family:'Cinzel',serif;font-size:13px;font-weight:700;flex-shrink:0;}
 .dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
 .muted{font-size:13px;font-style:italic;color:var(--ink-light);}
-.event-row{padding:9px 14px;border-bottom:1px solid rgba(122,85,16,0.22);position:relative;z-index:2;}
+.event-row{padding:9px 14px;border-bottom:1px solid rgba(122,85,16,0.22);position:relative;z-index:2;background:transparent;}
 .event-row:last-child{border-bottom:none;}
-.ev-name{font-size:14px;font-weight:600;color:var(--ink);}
+.ev-name{font-size:14px;font-weight:600;color:var(--ink);display:block;margin-bottom:3px;}
 .badge{font-family:'Cinzel',serif;font-size:10px;font-weight:700;padding:2px 6px;border-radius:2px;white-space:nowrap;text-transform:uppercase;display:inline-block;margin:1px;}
 .badge-dragon{background:var(--dragon);color:#fff;}.badge-wolf{background:var(--wolf);color:#fff;}
 .badge-snake{background:var(--snake);color:#fff;}.badge-lion{background:var(--lion);color:#fff;}
@@ -934,6 +984,7 @@ input[type=file]{display:none;}
   <button class="nav-btn" id="nav-personal" onclick="showView('personal')">👤 My Honour</button>
   <button class="nav-btn" id="nav-art"      onclick="showView('art')">🎨 Art</button>
   <button class="nav-btn" id="nav-riddles"  onclick="showView('riddles')">🧠 Riddles</button>
+  <button class="nav-btn" id="nav-bestdressed" onclick="showView('bestdressed')">👑 Best Dressed</button>
   <button class="nav-btn" id="nav-maester"  onclick="showView('maester')">📜 Grand Maester</button>
 </nav>
 
@@ -1069,6 +1120,34 @@ input[type=file]{display:none;}
   <div class="content">
     <div class="page-title"><h1>🧠 Trials of the Mind</h1><p>Prove thy wisdom · First to answer earns glory for thy house</p></div>
     <div id="riddle-list"></div>
+  </div>
+</div>
+
+<!-- ══ BEST DRESSED ══ -->
+<div id="view-bestdressed" class="view">
+  <div class="content">
+    <div class="page-title"><h1>👑 Best Dressed</h1><p>Cast thy vote for the finest attire in the realm · One vote per warrior</p></div>
+    <div class="parchment"><div class="parchment-bg"></div>
+      <div id="bd-form">
+        <div style="height:12px"></div>
+        <div class="form-group">
+          <label class="form-label" style="padding:0 14px">Who deserves the crown?</label>
+          <div class="input-wrap">
+            <input class="form-input" type="text" id="bd-name" placeholder="Name a warrior..." autocomplete="off"/>
+            <div class="suggestions" id="bd-sug" style="display:none"></div>
+          </div>
+        </div>
+        <div style="padding:0 14px 10px;font-size:13px;font-style:italic;color:var(--ink-light);position:relative;z-index:2">Thy vote is secret — results revealed only by the Grand Maester</div>
+        <button class="btn-primary" id="bd-submit-btn" onclick="submitBestDressedVote()">Cast My Vote 👑</button>
+        <div style="height:14px"></div>
+      </div>
+      <div class="success-block" id="bd-success" style="display:none">
+        <div class="s-icon">👑</div>
+        <h2>Vote Cast!</h2>
+        <p>Thou hast voted for <strong id="bd-voted-name"></strong>. The Grand Maester shall reveal the winner in due time!</p>
+        <div style="height:14px"></div>
+      </div>
+    </div>
   </div>
 </div>
 

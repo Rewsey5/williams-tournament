@@ -24,21 +24,121 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-// ══ AUDIO UNLOCK ══
-window.unlockAudio = function(){
-  const splash = document.getElementById('audio-splash');
-  if(splash) splash.style.display='none';
-  // Unlock audio context by playing silence
+// ══ ONBOARDING WIZARD ══
+let wizName='', wizHouse='';
+
+function unlockAudioCtx(){
   try{
     const ctx = new(window.AudioContext||window.webkitAudioContext)();
     const buf = ctx.createBuffer(1,1,22050);
     const src = ctx.createBufferSource();
-    src.buffer=buf; src.connect(ctx.destination); src.start(0);
-    ctx.resume();
+    src.buffer=buf; src.connect(ctx.destination); src.start(0); ctx.resume();
   }catch(e){}
-  // Prime all audio files
-  Object.values(SFX).forEach(s=>{ try{s.volume=0;s.play().then(()=>{s.pause();s.currentTime=0;s.volume=0.8;}).catch(()=>{});} catch(e){} });
+  Object.values(SFX).forEach(s=>{ try{s.volume=0;s.play().then(()=>{s.pause();s.currentTime=0;s.volume=0.8;}).catch(()=>{});}catch(e){} });
+}
+
+function wizShow(n){
+  document.querySelectorAll('.wz-step').forEach(s=>s.style.display='none');
+  const el=document.getElementById('wz-'+n);
+  if(el)el.style.display='block';
+}
+
+window.wizardEnter=function(){
+  unlockAudioCtx();           // unlock audio on this first tap
+  // If already checked in, skip straight past the wizard
+  if(getMyName()&&getMyHouse()){
+    document.getElementById('wizard').style.display='none';
+    return;
+  }
+  wizShow(1);
+  // wire up name autocomplete inside wizard
+  setTimeout(()=>{
+    const inp=document.getElementById('wz-name');
+    const sug=document.getElementById('wz-name-sug');
+    if(inp){
+      inp.addEventListener('input',()=>{
+        const m=fuzzyMatch(inp.value,GUESTS);
+        if(!inp.value||!m.length){sug.style.display='none';return;}
+        sug.innerHTML=m.map(n=>`<div data-n="${esc(n)}">${n}</div>`).join('');
+        sug.style.display='block';
+        sug.querySelectorAll('div').forEach(d=>d.addEventListener('click',()=>{inp.value=d.dataset.n;sug.style.display='none';}));
+      });
+      inp.focus();
+    }
+  },100);
 };
+
+window.wizardName=function(){
+  const inp=document.getElementById('wz-name');
+  const err=document.getElementById('wz-name-err');
+  const val=inp.value.trim();
+  if(!val){err.textContent='Thou must declare thy name to proceed';return;}
+  // Soft-validate against guest list — warn but allow (covers nicknames)
+  wizName=val;
+  err.textContent='';
+  wizShow(2);
+};
+
+window.wizardHouse=function(h,btn){
+  wizHouse=h;
+  document.querySelectorAll('.wz-house').forEach(b=>b.classList.remove('sel'));
+  btn.classList.add('sel');
+  document.getElementById('wz-house-err').textContent='';
+};
+
+window.wizardHouseNext=function(){
+  if(!wizHouse){document.getElementById('wz-house-err').textContent='Pledge to a house to proceed';return;}
+  // Save check-in NOW — this is the key fix: name+house in memory means duels show immediately
+  rememberMe(wizName,wizHouse);
+  // Also record house in Firestore so duels/scoring know it
+  try{ fsSet('state/playerHouses',{[normName(wizName)]:wizHouse}); }catch(e){}
+  wizShow(3);
+};
+
+// Tutorial station walkthrough
+const WZ_TUT=[
+  {icon:'⚔',title:'Standings',text:'The grand scoreboard — see every house\'s honour in real time, updated the instant scores change.'},
+  {icon:'🏹',title:'Archery',text:'Loose thy arrows at the target. Bullseye = 3 honour, first ring = 2, any hit = 1. Two arrows each!'},
+  {icon:'🔨',title:'Nail Into Log',text:'Drive a nail in as few swings as possible. 10 minus thy swings = honour points. Fewer swings, more glory!'},
+  {icon:'🪵',title:'Caber Toss',text:'Heave the great log! The further past the lines it flies, the more honour — up to 3 points. Two tosses each.'},
+  {icon:'⚔',title:'Duels',text:'Challenge any warrior and wager thy honour. Winner takes all! Go broke and the Grand Maester may show mercy...'},
+  {icon:'👤',title:'My Honour',text:'Check thy personal honour at any time — see thy archery, duels, riddles and every point thou hast earned.'},
+  {icon:'🎨',title:'Art Challenge',text:'Submit thy anonymous masterpiece, then rate everyone else\'s 1–5 stars. Best artwork wins honour!'},
+  {icon:'🧠',title:'Riddles',text:'Solve medieval riddles released through the day. First to answer correctly wins honour for their house!'},
+  {icon:'👑',title:'Best Dressed',text:'Vote for the finest medieval attire in the realm. One vote each — choose wisely!'},
+];
+let wzTutIdx=0;
+
+window.wizardTutStep=function(n){
+  wzTutIdx=0;
+  wizShow(4);
+  renderTutStep();
+};
+
+function renderTutStep(){
+  const t=WZ_TUT[wzTutIdx];
+  document.getElementById('wz-tut-icon').textContent=t.icon;
+  document.getElementById('wz-tut-title').textContent=t.title;
+  document.getElementById('wz-tut-text').textContent=t.text;
+  document.getElementById('wz-tut-progress').textContent=`${wzTutIdx+1} / ${WZ_TUT.length}`;
+  document.getElementById('wz-tut-next').textContent = wzTutIdx>=WZ_TUT.length-1 ? 'Enter the Tournament! ⚔' : 'Next →';
+}
+
+window.wizardTutNext=function(){
+  if(wzTutIdx>=WZ_TUT.length-1){ wizardFinish(); return; }
+  wzTutIdx++;
+  renderTutStep();
+};
+
+window.wizardFinish=function(){
+  document.getElementById('wizard').style.display='none';
+  renderWelcome();
+  updateDuelBadge();
+  if(currentView==='scoreboard')renderScoreboard();
+};
+
+// Back-compat: anything still calling unlockAudio just enters
+window.unlockAudio=window.wizardEnter;
 
 // ══ AUDIO ══
 const SFX = {
@@ -54,7 +154,7 @@ function playSound(k){ try{ const s=SFX[k]; if(s){s.currentTime=0;s.volume=0.8;s
 function haptic(p){ try{ if(navigator.vibrate) navigator.vibrate(p); }catch(e){} }
 
 // ══ GUESTS ══
-const GUESTS = ["Will","Rachel","Leigh","Charlie","Lanni","Tim","Anastashia","Tay","Ellen","Di","Steve","Sarah","Jack","Alex McDonald","Masia","Ollie","Liam","Siobhan","Xavier","Tamrin","Ryan","Sienna","Seb","Charlotte","Angus","Bec","Morgan","Maddy Brown","Maddy","Alex Broussard","Pat","Caitlin","Aaron","Kitty","Mim","Eska","Jojo","Rich","Ivy","Tilly","Henry","Paul Smith","Holly","Sophie","Eddy","Mike","Teresa","Emily","Kane","James","Dianna","Josh","Kelly","Noah","Len","Karen","Dianne Anderson","Pete","David","Kate","Tamara","Dave","Francis","Maeve","Zozo","Stephen McDonald","Steven Rewse-Bongers","Lilian","Eleanor","Harriet","Amber","Ducky","Patrice","Sam","Clara","Mitch","Grace","Alfie","Ewan","Paul Harrison","Dianne McDonald"];
+const GUESTS = ["Will","Rachael","Leigh","Charlie","Lanni","Tim","Anastashia","Tay","Ellen","Di","Steve","Sarah","Jack","Alex McDonald","Masia","Ollie","Liam","Siobhan","Xavier","Tamrin","Ryan","Sienna","Seb","Charlotte","Angus","Bec","Morgan","Maddy Brown","Maddy","Alex Broussard","Pat","Caitlin","Aaron","Kitty","Mim","Eska","Jojo","Rich","Ivy","Tilly","Henry","Paul Smith","Holly","Sophie","Eddy","Mike","Teresa","Emily","Kane","James","Dianna","Josh","Kelly","Noah","Len","Karen","Dianne Anderson","Pete","David","Kate","Tamara","Dave","Francis","Maeve","Zozo","Stephen McDonald","Steven Rewse-Bongers","Lilian","Eleanor","Harriet","Amber","Ducky","Patrice","Sam","Clara","Mitch","Grace","Alfie","Ewan","Paul Harrison","Dianne McDonald","Jayden","Allison","Crawf"];
 
 const HOUSES = [
   {id:'dragon',name:'Dragon',emoji:'🐉',color:'#c0392b',img:'house_dragon_transparent.png'},
@@ -70,9 +170,12 @@ const TEAM_EVENTS = [
   {id:'joust',       name:'Pool Noodle Joust', emoji:'🤺'},
 ];
 
+const WINNER_BONUS = 15; // Art & Best Dressed winner gets this to self + house when locked
+const REDEMPTION_PTS = 3; // Auto one-time grant when a warrior hits 0
+
 const RANK_PTS = [30,20,10,0];
 const STARTING_PTS = 5;
-const ADMIN_PW = '21';
+const ADMIN_PW = 'boogle';
 const RIDDLE_PTS = 7;
 
 const RIDDLES = [
@@ -105,7 +208,7 @@ function getMyName(){ return localStorage.getItem('wt_name')||''; }
 function getMyHouse(){ return localStorage.getItem('wt_house')||''; }
 
 // ══ STATE ══
-let S = { teamRankings:{}, eggs:{dragon:0,wolf:0,snake:0,lion:0}, bonus:{dragon:0,wolf:0,snake:0,lion:0}, playerHouses:{}, archery:[], nail:[], duels:[], riddles:{}, art:[] };
+let S = { teamRankings:{}, eggs:{dragon:0,wolf:0,snake:0,lion:0}, bonus:{dragon:0,wolf:0,snake:0,lion:0}, playerHouses:{}, archery:[], nail:[], caber:[], duels:[], riddles:{}, art:[], bestDressed:[], grants:[], redemptions:{}, locks:{} };
 let adminUnlocked = false;
 let currentView = 'scoreboard';
 let submitting = false;
@@ -133,18 +236,21 @@ async function loadAll(){
   showLoading(true);
   await cleanupBadDuels();
   try {
-    const [r,e,b,h,rd,ar,na,du,art,bd]=await Promise.all([
+    const [r,e,b,h,rd,ar,na,cb,du,art,bd,gr,rdm,lk]=await Promise.all([
       getDoc(doc(db,'state','teamRankings')),getDoc(doc(db,'state','eggs')),
       getDoc(doc(db,'state','bonus')),getDoc(doc(db,'state','playerHouses')),
       getDoc(doc(db,'state','riddles')),
-      fsGetAll('archery'),fsGetAll('nail'),fsGetAll('duels'),fsGetAll('art'),fsGetAll('bestDressed'),
+      fsGetAll('archery'),fsGetAll('nail'),fsGetAll('caber'),fsGetAll('duels'),fsGetAll('art'),fsGetAll('bestDressed'),fsGetAll('grants'),
+      getDoc(doc(db,'state','redemptions')),getDoc(doc(db,'state','locks')),
     ]);
     S.teamRankings=r.exists()?r.data():{};
     S.eggs=e.exists()?e.data():{dragon:0,wolf:0,snake:0,lion:0};
     S.bonus=b.exists()?b.data():{dragon:0,wolf:0,snake:0,lion:0};
     S.playerHouses=h.exists()?h.data():{};
     S.riddles=rd.exists()?rd.data():{};
-    S.archery=ar; S.nail=na; S.duels=du; S.art=art; S.bestDressed=bd;
+    S.redemptions=rdm.exists()?rdm.data():{};
+    S.locks=lk.exists()?lk.data():{};
+    S.archery=ar; S.nail=na; S.caber=cb; S.duels=du; S.art=art; S.bestDressed=bd; S.grants=gr;
   } catch(e){ toast('Scrolls unreachable — check thy connection'); }
   showLoading(false);
 }
@@ -155,7 +261,11 @@ function startListeners(){
   onSnapshot(collection(db,'nail'),s=>{ S.nail=s.docs.map(d=>({id:d.id,...d.data()})); if(currentView==='scoreboard')renderScoreboard(); if(currentView==='nail')renderNailBoard(); if(adminUnlocked&&currentView==='maester')renderMaester(); });
   onSnapshot(collection(db,'duels'),s=>{ S.duels=s.docs.map(d=>({id:d.id,...d.data()})); if(currentView==='duel')renderDuels(); updateDuelBadge(); if(adminUnlocked&&currentView==='maester')renderMaester(); });
   onSnapshot(collection(db,'art'),s=>{ S.art=s.docs.map(d=>({id:d.id,...d.data()})); if(currentView==='art')renderArt(); if(adminUnlocked&&currentView==='maester')renderMaester(); });
-  onSnapshot(collection(db,'bestDressed'),s=>{ S.bestDressed=s.docs.map(d=>({id:d.id,...d.data()})); if(adminUnlocked&&currentView==='maester')renderMaester(); });
+  onSnapshot(collection(db,'bestDressed'),s=>{ S.bestDressed=s.docs.map(d=>({id:d.id,...d.data()})); if(currentView==='scoreboard')renderScoreboard(); if(adminUnlocked&&currentView==='maester')renderMaester(); });
+  onSnapshot(collection(db,'caber'),s=>{ S.caber=s.docs.map(d=>({id:d.id,...d.data()})); if(currentView==='scoreboard')renderScoreboard(); if(currentView==='caber')renderCaberBoard(); if(adminUnlocked&&currentView==='maester')renderMaester(); });
+  onSnapshot(collection(db,'grants'),s=>{ S.grants=s.docs.map(d=>({id:d.id,...d.data()})); if(currentView==='scoreboard')renderScoreboard(); if(currentView==='personal')lookupPersonal(); if(adminUnlocked&&currentView==='maester')renderMaester(); });
+  onSnapshot(doc(db,'state','redemptions'),s=>{ if(s.exists())S.redemptions=s.data(); if(currentView==='scoreboard')renderScoreboard(); });
+  onSnapshot(doc(db,'state','locks'),s=>{ if(s.exists())S.locks=s.data(); if(currentView==='scoreboard')renderScoreboard(); if(adminUnlocked&&currentView==='maester')renderMaester(); });
   onSnapshot(doc(db,'state','teamRankings'),s=>{ if(s.exists())S.teamRankings=s.data(); if(currentView==='scoreboard')renderScoreboard(); if(adminUnlocked&&currentView==='maester')renderMaester(); });
   onSnapshot(doc(db,'state','eggs'),s=>{ if(s.exists())S.eggs=s.data(); if(currentView==='scoreboard')renderScoreboard(); if(adminUnlocked&&currentView==='maester')renderMaester(); });
   onSnapshot(doc(db,'state','bonus'),s=>{ if(s.exists())S.bonus=s.data(); if(currentView==='scoreboard')renderScoreboard(); });
@@ -166,12 +276,15 @@ function startListeners(){
 // Kept for manual refresh calls — now just re-renders from live state
 async function refreshAllData(force){
   try {
-    const [ar,na,art,bd,rankings,eggs,bonus,houses,ridst]=await Promise.all([
-      fsGetAll('archery'),fsGetAll('nail'),fsGetAll('art'),fsGetAll('bestDressed'),
+    const [ar,na,cb,art,bd,gr,rankings,eggs,bonus,houses,ridst,rdm,lk]=await Promise.all([
+      fsGetAll('archery'),fsGetAll('nail'),fsGetAll('caber'),fsGetAll('art'),fsGetAll('bestDressed'),fsGetAll('grants'),
       getDoc(doc(db,'state','teamRankings')),getDoc(doc(db,'state','eggs')),
       getDoc(doc(db,'state','bonus')),getDoc(doc(db,'state','playerHouses')),getDoc(doc(db,'state','riddles')),
+      getDoc(doc(db,'state','redemptions')),getDoc(doc(db,'state','locks')),
     ]);
-    S.archery=ar;S.nail=na;S.art=art;S.bestDressed=bd;
+    S.archery=ar;S.nail=na;S.caber=cb;S.art=art;S.bestDressed=bd;S.grants=gr;
+    if(rdm.exists())S.redemptions=rdm.data();
+    if(lk.exists())S.locks=lk.data();
     if(rankings.exists())S.teamRankings=rankings.data();
     if(eggs.exists())S.eggs=eggs.data();
     if(bonus.exists())S.bonus=bonus.data();
@@ -184,28 +297,60 @@ async function refreshAllData(force){
 // ══ POINTS ══
 function housePoints(){
   const pts={dragon:0,wolf:0,snake:0,lion:0};
+  // Team events — ranked 30/20/10/0
   TEAM_EVENTS.forEach(ev=>{ const r=S.teamRankings[ev.id]; if(!r)return; r.forEach((hid,i)=>{ if(hid&&pts[hid]!==undefined)pts[hid]+=RANK_PTS[i]; }); });
-  HOUSES.forEach(h=>{ const shots=S.archery.filter(a=>a.house===h.id); if(!shots.length)return; pts[h.id]+=Math.round(shots.reduce((s,a)=>s+a.score,0)/shots.length*10); });
-  HOUSES.forEach(h=>{ const en=S.nail.filter(n=>n.house===h.id); if(!en.length)return; pts[h.id]+=Math.round(en.reduce((s,n)=>s+Math.max(0,10-n.swings),0)/en.length*10); });
-  HOUSES.forEach(h=>{ pts[h.id]+=Math.min(30,(S.eggs[h.id]||0)*3); });
-  HOUSES.forEach(h=>{ pts[h.id]+=(S.bonus[h.id]||0); });
+  // Archery — every point earned goes straight to the house (clear-cut, no average)
+  S.archery.forEach(a=>{ if(pts[a.house]!==undefined)pts[a.house]+=a.score; });
+  // Nail — (10 - swings) straight to house
+  S.nail.forEach(n=>{ if(pts[n.house]!==undefined)pts[n.house]+=Math.max(0,10-n.swings); });
+  // Caber — distance points straight to house
+  S.caber.forEach(cb=>{ if(pts[cb.house]!==undefined)pts[cb.house]+=(cb.score||0); });
+  // Riddles — 7 to the winning house
   Object.values(S.riddles).forEach(rd=>{ if(rd.solved&&rd.winnerHouse&&pts[rd.winnerHouse]!==undefined)pts[rd.winnerHouse]+=RIDDLE_PTS; });
+  // Dragon Eggs — 3 each, capped 30
+  HOUSES.forEach(h=>{ pts[h.id]+=Math.min(30,(S.eggs[h.id]||0)*3); });
+  // Maester individual grants — credit the person's house too
+  (S.grants||[]).forEach(g=>{ if(g.house&&pts[g.house]!==undefined)pts[g.house]+=(g.pts||0); });
+  // Art & Best Dressed winner bonus — only once locked in by the Maester
+  if(S.locks){
+    if(S.locks.art&&S.locks.art.house&&pts[S.locks.art.house]!==undefined)pts[S.locks.art.house]+=WINNER_BONUS;
+    if(S.locks.bestDressed&&S.locks.bestDressed.house&&pts[S.locks.bestDressed.house]!==undefined)pts[S.locks.bestDressed.house]+=WINNER_BONUS;
+  }
+  // Manual house bonus (Maester)
+  HOUSES.forEach(h=>{ pts[h.id]+=(S.bonus[h.id]||0); });
   return pts;
 }
 
+let _ppCache={};
+function clearPPCache(){ _ppCache={}; }
 function personalPoints(name){
   const norm=normName(name);
+  if(_ppCache[norm]) return _ppCache[norm];
   let pts=STARTING_PTS;
   const breakdown=[{label:'⚔ Starting Honour',pts:STARTING_PTS,detail:'All warriors begin with 5 pts'}];
   const shots=S.archery.filter(a=>normName(a.name)===norm);
   if(shots.length){const ap=shots.reduce((s,a)=>s+a.score,0);pts+=ap;breakdown.push({label:'🏹 Archery',pts:ap,detail:shots.length+' shot(s)'});}
   const nails=S.nail.filter(n=>normName(n.name)===norm);
   if(nails.length){const np=nails.reduce((s,n)=>s+Math.max(0,10-n.swings),0);pts+=np;breakdown.push({label:'🔨 Nail Log',pts:np,detail:nails.map(n=>n.swings+' swings').join(', ')});}
+  const cabers=S.caber.filter(cb=>normName(cb.name)===norm);
+  if(cabers.length){const cp=cabers.reduce((s,cb)=>s+(cb.score||0),0);pts+=cp;breakdown.push({label:'🪵 Caber Toss',pts:cp,detail:cabers.length+' toss(es)'});}
   const myDuels=S.duels.filter(d=>d.status==='done'&&(normName(d.p1)===norm||normName(d.p2)===norm));
   if(myDuels.length){const dp=myDuels.reduce((s,d)=>normName(d.winner)===norm?s+d.wager:s-d.wager,0);pts+=dp;breakdown.push({label:'⚔ Duels',pts:dp,detail:myDuels.filter(d=>normName(d.winner)===norm).length+'W / '+myDuels.filter(d=>normName(d.winner)!==norm).length+'L'});}
   const rw=Object.values(S.riddles).filter(r=>r.solved&&normName(r.winnerName)===norm);
   if(rw.length){pts+=rw.length*RIDDLE_PTS;breakdown.push({label:'🧠 Riddles',pts:rw.length*RIDDLE_PTS,detail:rw.length+' riddle(s) solved'});}
-  return {pts,breakdown,duels:S.duels.filter(d=>normName(d.p1)===norm||normName(d.p2)===norm)};
+  // Maester individual grants
+  const myGrants=(S.grants||[]).filter(g=>normName(g.name)===norm);
+  if(myGrants.length){const gp=myGrants.reduce((s,g)=>s+(g.pts||0),0);pts+=gp;breakdown.push({label:'📜 Maester\'s Grant',pts:gp,detail:'Awarded by the Grand Maester'});}
+  // Art / Best Dressed winner bonus (once locked)
+  if(S.locks){
+    if(S.locks.art&&normName(S.locks.art.name)===norm){pts+=WINNER_BONUS;breakdown.push({label:'🎨 Art Champion',pts:WINNER_BONUS,detail:'Finest masterpiece in the realm'});}
+    if(S.locks.bestDressed&&normName(S.locks.bestDressed.name)===norm){pts+=WINNER_BONUS;breakdown.push({label:'👑 Best Dressed',pts:WINNER_BONUS,detail:'Finest attire in the realm'});}
+  }
+  // Peasant's Redemption — one-time grant once someone hit 0
+  if(S.redemptions&&S.redemptions[norm]){pts+=REDEMPTION_PTS;breakdown.push({label:'🕊️ Peasant\'s Redemption',pts:REDEMPTION_PTS,detail:'Granted to rise again from ruin'});}
+  const result={pts,breakdown,duels:S.duels.filter(d=>normName(d.p1)===norm||normName(d.p2)===norm)};
+  _ppCache[norm]=result;
+  return result;
 }
 
 function houseSumPersonal(){
@@ -213,10 +358,12 @@ function houseSumPersonal(){
   const all={};
   S.archery.forEach(a=>{if(!all[normName(a.name)])all[normName(a.name)]={name:a.name,house:a.house};});
   S.nail.forEach(n=>{if(!all[normName(n.name)])all[normName(n.name)]={name:n.name,house:n.house};});
+  S.caber.forEach(cb=>{if(!all[normName(cb.name)])all[normName(cb.name)]={name:cb.name,house:cb.house};});
   S.duels.filter(d=>d.status==='done').forEach(d=>{
     if(!all[normName(d.p1)])all[normName(d.p1)]={name:d.p1,house:d.p1house};
     if(!all[normName(d.p2)])all[normName(d.p2)]={name:d.p2,house:d.p2house};
   });
+  (S.grants||[]).forEach(g=>{if(!all[normName(g.name)])all[normName(g.name)]={name:g.name,house:g.house};});
   Object.values(S.riddles).filter(r=>r.solved&&r.winnerHouse).forEach(r=>{if(!all[normName(r.winnerName)])all[normName(r.winnerName)]={name:r.winnerName,house:r.winnerHouse};});
   Object.values(all).forEach(p=>{if(sums[p.house]!==undefined)sums[p.house]+=personalPoints(p.name).pts;});
   return sums;
@@ -226,10 +373,12 @@ function individualLeaderboard(){
   const all={};
   S.archery.forEach(a=>{if(!all[normName(a.name)])all[normName(a.name)]={name:a.name,house:a.house};});
   S.nail.forEach(n=>{if(!all[normName(n.name)])all[normName(n.name)]={name:n.name,house:n.house};});
+  S.caber.forEach(cb=>{if(!all[normName(cb.name)])all[normName(cb.name)]={name:cb.name,house:cb.house};});
   S.duels.filter(d=>d.status==='done').forEach(d=>{
     if(!all[normName(d.p1)])all[normName(d.p1)]={name:d.p1,house:d.p1house};
     if(!all[normName(d.p2)])all[normName(d.p2)]={name:d.p2,house:d.p2house};
   });
+  (S.grants||[]).forEach(g=>{if(!all[normName(g.name)])all[normName(g.name)]={name:g.name,house:g.house};});
   Object.values(S.riddles).filter(r=>r.solved).forEach(r=>{if(!all[normName(r.winnerName)])all[normName(r.winnerName)]={name:r.winnerName,house:r.winnerHouse};});
   return Object.values(all).map(p=>({...p,pts:personalPoints(p.name).pts})).sort((a,b)=>b.pts-a.pts);
 }
@@ -293,11 +442,28 @@ function fireConfetti(){
 }
 
 // ══ ANIMATED COUNTER ══
+const _counterVals={};      // last shown value per element
+const _counterTimers={};    // active animation timer per element
 function animateCounter(elId, target, color){
   const el=document.getElementById(elId); if(!el)return;
   if(color)el.style.color=color;
-  let cur=0;
-  const iv=setInterval(()=>{cur+=Math.max(1,Math.ceil((target-cur)/6));if(cur>=target){cur=target;clearInterval(iv);}el.textContent=cur;},35);
+  const prev=_counterVals[elId];
+  // First time we see this element: just set it, no animation from 0
+  if(prev===undefined){ _counterVals[elId]=target; el.textContent=target; return; }
+  // Value unchanged: leave it alone (prevents constant re-animation on every sync)
+  if(prev===target){ el.textContent=target; return; }
+  // Value changed: animate FROM previous value TO new value
+  if(_counterTimers[elId]) clearInterval(_counterTimers[elId]);
+  let cur=prev;
+  const up=target>prev;
+  _counterTimers[elId]=setInterval(()=>{
+    const step=Math.max(1,Math.ceil(Math.abs(target-cur)/6));
+    cur += up?step:-step;
+    if((up&&cur>=target)||(!up&&cur<=target)){ cur=target; clearInterval(_counterTimers[elId]); }
+    el.textContent=cur;
+    _counterVals[elId]=cur;
+  },35);
+  _counterVals[elId]=target;
 }
 
 // ══ PARCHMENT MODAL ══
@@ -323,6 +489,7 @@ function showView(v){
   if(v==='scoreboard')renderScoreboard();
   if(v==='archery'){renderArcheryBoard();setupNameInput('arch-name','arch-sug',n=>{const h=S.playerHouses[normName(n)]||getMyHouse();if(h)setArchHouse(h);});}
   if(v==='nail'){renderNailBoard();setupNameInput('nail-name','nail-sug',n=>{const h=S.playerHouses[normName(n)]||getMyHouse();if(h)setNailHouse(h);});}
+  if(v==='caber'){renderCaberBoard();setupNameInput('caber-name','caber-sug',n=>{const h=S.playerHouses[normName(n)]||getMyHouse();if(h)setCaberHouse(h);});}
   if(v==='duel'){renderDuels();setupNameInput('duel-p1','duel-sug1',()=>{});setupNameInput('duel-p2','duel-sug2',()=>{});}
   if(v==='personal'){setupNameInput('personal-name','personal-sug',()=>{});autoLoadPersonal();}
   if(v==='art'){renderArt();setupNameInput('art-name','art-sug',n=>{const h=S.playerHouses[normName(n)]||getMyHouse();if(h)document.getElementById('art-house').value=h;});}
@@ -349,6 +516,7 @@ function autoLoadPersonal(){
 
 // ══ SCOREBOARD ══
 function renderScoreboard(){
+  clearPPCache();
   const pts=housePoints();
   const ranked=HOUSES.slice().sort((a,b)=>(pts[b.id]||0)-(pts[a.id]||0));
   const ranks=['1st','2nd','3rd','4th'];
@@ -445,6 +613,43 @@ function renderNailBoard(){
   document.getElementById('nail-board').innerHTML=sorted.length===0?'<div class="muted" style="padding:12px 14px">No entries yet, brave warriors</div>':sorted.slice(0,20).map((n,i)=>{const h=HOUSES.find(x=>x.id===n.house);return`<div class="lb-row"><div class="lb-rank">${i+1}.</div><div class="dot" style="background:${h?.color||'#888'}"></div><div class="lb-name">${esc(n.name)}</div><div class="lb-pts" style="color:${h?.color||'#888'}">${n.swings} swings · ${Math.max(0,10-n.swings)}pts</div></div>`;}).join('');
 }
 
+// ══ CABER TOSS ══
+let caberSelHouse=null,caberSelScore=null;
+function setCaberHouse(h){caberSelHouse=h;document.querySelectorAll('.caber-house-btn').forEach(b=>b.classList.remove('sel'));document.querySelectorAll(`.caber-house-btn.${h}`).forEach(b=>b.classList.add('sel'));}
+function setCaberScore(s,btn){caberSelScore=s;document.querySelectorAll('.caber-line-btn').forEach(b=>b.classList.remove('sel'));btn.classList.add('sel');}
+
+async function submitCaber(){
+  if(submitting)return;submitting=true;
+  const btn=document.getElementById('caber-submit-btn');btn.disabled=true;
+  const name=document.getElementById('caber-name').value.trim();
+  if(!name){toast('Declare thy name!');submitting=false;btn.disabled=false;return;}
+  if(!caberSelHouse){toast('Name thy house!');submitting=false;btn.disabled=false;return;}
+  if(caberSelScore===null){toast('Choose how far thy caber flew');submitting=false;btn.disabled=false;return;}
+  if(S.caber.filter(cb=>normName(cb.name)===normName(name)).length>=2){toast('Thou hast already tossed thy 2 cabers!');submitting=false;btn.disabled=false;return;}
+  await fsSet('state/playerHouses',{[normName(name)]:caberSelHouse});
+  await fsAdd('caber',{name,house:caberSelHouse,score:caberSelScore});
+  rememberMe(name,caberSelHouse);
+  playSound('hammer'); haptic([40,15,40]);
+  if(caberSelScore===3)fireConfetti();
+  const lbl=caberSelScore===3?'Past the third line! 🪵':caberSelScore===2?'Past the second line! 🪵':caberSelScore===1?'Past the first line! 🪵':'It barely moved... 😅';
+  showSuccess('caber',`${name} — ${lbl} — ${caberSelScore} honour for thee & House ${capFirst(caberSelHouse)}!`);
+  caberSelScore=null;caberSelHouse=null;submitting=false;
+}
+
+function resetCaber(){document.getElementById('caber-form').style.display='';document.getElementById('caber-success').style.display='none';document.getElementById('caber-submit-btn').disabled=false;caberSelScore=null;caberSelHouse=null;document.querySelectorAll('.caber-house-btn,.caber-line-btn').forEach(b=>b.classList.remove('sel'));autoFillName('caber-name',h=>setCaberHouse(h));}
+
+function renderCaberBoard(){
+  autoFillName('caber-name',h=>setCaberHouse(h));
+  const sorted=HOUSES.map(h=>({h,tosses:S.caber.filter(cb=>cb.house===h.id)})).sort((a,b)=>{const aa=a.tosses.reduce((s,x)=>s+(x.score||0),0);const bb=b.tosses.reduce((s,x)=>s+(x.score||0),0);return bb-aa;});
+  document.getElementById('caber-board').innerHTML=sorted.map(({h,tosses})=>{
+    if(!tosses.length)return`<div class="lb-row"><div class="dot" style="background:${h.color}"></div><div class="lb-name">${h.emoji} House ${h.name}</div><span class="muted">No tosses yet</span></div>`;
+    const total=tosses.reduce((s,cb)=>s+(cb.score||0),0);
+    return`<div class="lb-row"><div class="dot" style="background:${h.color}"></div><div class="lb-name">${h.emoji} House ${h.name}<div class="lb-sub">${tosses.length} toss(es)</div></div><div class="lb-pts" style="color:${h.color}">${total}pts</div></div>`;
+  }).join('');
+  const all=[...S.caber].sort((a,b)=>(b.score||0)-(a.score||0));
+  document.getElementById('caber-solo-board').innerHTML=all.length===0?'<div class="muted" style="padding:12px 14px">No tosses yet</div>':all.map((cb,i)=>{const h=HOUSES.find(x=>x.id===cb.house);const lbl=cb.score===3?'🪵 3rd line':cb.score===2?'🪵 2nd line':cb.score===1?'🪵 1st line':'No distance';return`<div class="lb-row"><div class="lb-rank">${i+1}.</div><div class="dot" style="background:${h?.color||'#888'}"></div><div class="lb-name">${esc(cb.name)}</div><div class="lb-pts" style="color:${h?.color||'#888'}">${lbl}</div></div>`;}).join('');
+}
+
 function showSuccess(type,txt){document.getElementById(type+'-form').style.display='none';document.getElementById(type+'-success').style.display='block';document.getElementById(type+'-success-txt').textContent=txt;}
 
 // ══ DUELS ══
@@ -458,7 +663,10 @@ async function issueDuel(){
   if(normName(p1)===normName(p2)){toast('One cannot duel oneself!');submitting=false;btn.disabled=false;return;}
   if(isNaN(wager)||wager<1){toast('Set a worthy wager');submitting=false;btn.disabled=false;return;}
   const p1pts=personalPoints(p1).pts;
-  if(wager>p1pts){toast(`${p1} hath not enough honour! (${p1pts} pts available)`);submitting=false;btn.disabled=false;return;}
+  if(wager>p1pts){toast(`Thou hast not enough honour! (${p1pts} pts available)`);submitting=false;btn.disabled=false;return;}
+  // Opponent must be able to cover the wager too
+  const p2pts=personalPoints(p2).pts;
+  if(wager>p2pts){toast(`${p2}'s honour is too low for that wager (they have ${p2pts} pts)`);submitting=false;btn.disabled=false;return;}
   const p1house=S.playerHouses[normName(p1)]||null;
   const p2house=S.playerHouses[normName(p2)]||null;
   await fsAdd('duels',{p1,p2,p1house,p2house,wager,status:'pending',winner:null});
@@ -470,28 +678,45 @@ async function issueDuel(){
 
 async function confirmDuel(id){
   const duel=S.duels.find(d=>d.id===id);if(!duel)return;
-  const inp=document.getElementById('confirm-inp-'+id);if(!inp)return;
-  if(normName(inp.value)!==normName(duel.p2)){toast(`Only ${duel.p2} may confirm!`);return;}
+  if(duel.status!=='pending'){toast('This duel is no longer pending');return;}
+  // Opponent's honour could have dropped since the challenge was issued — re-check
   const p2pts=personalPoints(duel.p2).pts;
-  if(duel.wager>p2pts){toast(`${duel.p2} hath not enough honour! (${p2pts} pts)`);return;}
+  if(duel.wager>p2pts){toast(`Thou canst no longer cover this wager (thou hast ${p2pts} pts)`);return;}
   await setDoc(doc(db,'duels',id),{status:'awaiting'},{merge:true});
+  if(duel)duel.status='awaiting';
   playSound('sword'); haptic([20,10,20]);
-  toast('Duel confirmed! Now fight! ⚔');
+  toast('Duel accepted! Fight, then record the victor! ⚔');
 }
 
 async function declineDuel(id){
   const duel=S.duels.find(d=>d.id===id);if(!duel)return;
-  const inp=document.getElementById('confirm-inp-'+id);if(!inp)return;
-  if(normName(inp.value)!==normName(duel.p2)){toast(`Only ${duel.p2} may decline!`);return;}
+  if(duel.status!=='pending'){toast('This duel is no longer pending');return;}
   await setDoc(doc(db,'duels',id),{status:'declined'},{merge:true});
+  if(duel)duel.status='declined';
   toast('Duel declined — cowardice noted 🐔');
 }
 
 async function claimDuel(id,winner){
+  const duel=S.duels.find(d=>d.id===id);
+  if(duel&&duel.status==='done'){toast('This duel hath already been decided!');return;}
   await setDoc(doc(db,'duels',id),{status:'done',winner},{merge:true});
   playSound('sword'); haptic([30,10,30,10,50]);
   fireConfetti();
   toast(winner+' claims victory! ⚔');
+  // Update local duel state so points recompute immediately
+  if(duel){duel.status='done';duel.winner=winner;}
+  // Peasant's Redemption — if the loser has hit 0 (or below) and never been redeemed, grant once
+  if(duel){
+    const loser = normName(winner)===normName(duel.p1) ? duel.p2 : duel.p1;
+    const loserNorm = normName(loser);
+    clearPPCache();
+    if(personalPoints(loser).pts<=0 && !((S.redemptions||{})[loserNorm])){
+      await fsSet('state/redemptions',{[loserNorm]:true});
+      S.redemptions=S.redemptions||{}; S.redemptions[loserNorm]=true;
+      clearPPCache();
+      setTimeout(()=>toast(loser+' hath been granted a Peasant\'s Redemption — +3 honour to rise again! 🕊️'),1600);
+    }
+  }
 }
 
 function renderDuels(){
@@ -505,8 +730,27 @@ function renderDuels(){
   const declined=S.duels.filter(d=>d.status==='declined'&&isMine(d)).slice().reverse();
 
   document.getElementById('pending-duels').innerHTML=[...pending,...awaiting].length===0?'<div class="muted" style="padding:16px;text-align:center">No active duels involving thee</div>':[...pending,...awaiting].map(d=>{
-    if(d.status==='awaiting')return`<div class="duel-item"><div style="font-weight:600;font-size:14px;color:var(--ink)">${esc(d.p1)} <span style="color:#e6a817">⚔</span> ${esc(d.p2)}</div><div class="muted" style="font-size:11px;margin:2px 0">Wager: ${d.wager} pts · Confirmed — claim thy victor!</div><div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap"><button class="btn-sm" onclick="claimDuel('${d.id}','${esc(d.p1)}')">${esc(d.p1)} won ⚔</button><button class="btn-sm" onclick="claimDuel('${d.id}','${esc(d.p2)}')">${esc(d.p2)} won ⚔</button></div></div>`;
-    return`<div class="duel-item"><div style="font-weight:600;font-size:14px;color:var(--ink)">${esc(d.p1)} <span style="color:#e6a817">⚔</span> ${esc(d.p2)}</div><div class="muted" style="font-size:11px;margin:2px 0">Wager: ${d.wager} pts · ${esc(d.p2)} must confirm or decline</div><div style="margin-top:8px;padding:8px;background:rgba(139,105,20,0.1);border-radius:3px"><div style="font-size:10px;font-family:'Cinzel',serif;color:var(--ink-light);margin-bottom:5px">ART THOU ${esc(d.p2).toUpperCase()}? SPEAK THY NAME:</div><div style="display:flex;gap:5px;flex-wrap:wrap"><input class="form-input" style="font-size:14px;padding:7px 10px;flex:1;min-width:120px" type="text" id="confirm-inp-${d.id}" placeholder="${esc(d.p2)}'s name..."/><button class="btn-sm" onclick="confirmDuel('${d.id}')">Accept ⚔</button><button class="btn-sm" style="background:#2a0505;border-color:#c0392b;color:#e74c3c" onclick="declineDuel('${d.id}')">Decline 🐔</button></div></div></div>`;
+    const iAmChallenger = normName(d.p1)===normName(myName);
+    const iAmOpponent = normName(d.p2)===normName(myName);
+    const head=`<div style="font-weight:600;font-size:15px;color:var(--ink);text-align:center">${esc(d.p1)} <span style="color:#e6a817">⚔</span> ${esc(d.p2)}</div>`;
+
+    // CONFIRMED — both can claim the victor
+    if(d.status==='awaiting'){
+      return`<div class="duel-item">${head}<div class="muted" style="font-size:12px;margin:4px 0 8px;text-align:center">Wager: ${d.wager} honour · Duel accepted — who won?</div><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn-sm" style="flex:1" onclick="claimDuel('${d.id}','${esc(d.p1)}')">${esc(d.p1)} won ⚔</button><button class="btn-sm" style="flex:1" onclick="claimDuel('${d.id}','${esc(d.p2)}')">${esc(d.p2)} won ⚔</button></div></div>`;
+    }
+
+    // PENDING + I am the opponent → one-tap accept/decline
+    if(iAmOpponent){
+      return`<div class="duel-item">${head}<div class="muted" style="font-size:12px;margin:4px 0 8px;text-align:center">${esc(d.p1)} challenges thee for <strong>${d.wager} honour</strong>!</div><div style="display:flex;gap:6px"><button class="btn-sm" style="flex:1;background:linear-gradient(180deg,#1a4a1a,#0d2a0d);border-color:#2a9a55" onclick="confirmDuel('${d.id}')">⚔ Accept the Duel</button><button class="btn-sm" style="flex:1;background:#2a0505;border-color:#c0392b;color:#e74c3c" onclick="declineDuel('${d.id}')">🐔 Decline</button></div></div>`;
+    }
+
+    // PENDING + I am the challenger → waiting status
+    if(iAmChallenger){
+      return`<div class="duel-item">${head}<div style="text-align:center;margin-top:6px"><div style="display:inline-block;padding:6px 14px;background:rgba(139,105,20,0.12);border:1px solid rgba(139,105,20,0.3);border-radius:20px;font-size:12px;font-style:italic;color:var(--ink-light)">⏳ Waiting for ${esc(d.p2)} to accept on their device...</div></div><div class="muted" style="font-size:11px;margin-top:6px;text-align:center">Wager: ${d.wager} honour</div></div>`;
+    }
+
+    // Fallback (shouldn't normally show)
+    return`<div class="duel-item">${head}<div class="muted" style="font-size:11px;text-align:center">Wager: ${d.wager} pts · awaiting ${esc(d.p2)}</div></div>`;
   }).join('');
 
   document.getElementById('duel-history').innerHTML=([...done,...declined]).length===0?'<div class="muted" style="padding:14px;text-align:center">No battles fought yet</div>':[...done,...declined].slice(0,20).map(d=>`<div class="lb-row"><div class="lb-name" style="color:var(--ink)">${esc(d.p1)} vs ${esc(d.p2)}<div class="lb-sub">${d.status==='done'?'Victor: '+esc(d.winner)+' · '+d.wager+' pts':'Declined 🐔'}</div></div><div style="font-size:16px">${d.status==='done'?'✅':'🐔'}</div></div>`).join('');
@@ -514,6 +758,7 @@ function renderDuels(){
 
 // ══ PERSONAL ══
 async function lookupPersonal(){
+  clearPPCache();
   const name=document.getElementById('personal-name').value.trim();
   if(!name){toast('Enter thy name, warrior');return;}
   const res=personalPoints(name);
@@ -530,14 +775,55 @@ async function lookupPersonal(){
   document.getElementById('personal-duels').innerHTML=res.duels.length===0?'<div class="muted" style="padding:10px 14px">No duels fought yet</div>':res.duels.map(d=>{const opp=normName(d.p1)===normName(name)?d.p2:d.p1;const won=d.status==='done'&&normName(d.winner)===normName(name);const pend=d.status!=='done';return`<div class="lb-row"><div class="lb-name">${pend?'⏳':'⚔'} vs ${esc(opp)}<div class="lb-sub">Wager: ${d.wager}pts · ${pend?'Pending':won?'Victory! ✅':'Defeated ❌'}</div></div><div class="lb-pts" style="color:${won?'#1e8449':pend?'#b7770d':'#c0392b'}">${won?'+'+d.wager:pend?'?':'-'+d.wager}</div></div>`;}).join('');
 }
 
+// ══ HOUSE FIX (My Honour escape hatch) ══
+function openHouseFix(){
+  const box=document.getElementById('house-fix-box');
+  if(box) box.style.display = box.style.display==='none' ? 'block' : 'none';
+}
+async function fixHouse(h){
+  const name=document.getElementById('personal-name').value.trim()||getMyName();
+  if(!name){toast('Look up thy name first');return;}
+  // Update device memory
+  rememberMe(name,h);
+  // Update Firestore player house mapping
+  await fsSet('state/playerHouses',{[normName(name)]:h});
+  S.playerHouses[normName(name)]=h;
+  // Update any existing entries this person has so their points land on the right house
+  for(const a of S.archery.filter(x=>normName(x.name)===normName(name))){ try{await setDoc(doc(db,'archery',a.id),{house:h},{merge:true});a.house=h;}catch(e){} }
+  for(const n of S.nail.filter(x=>normName(x.name)===normName(name))){ try{await setDoc(doc(db,'nail',n.id),{house:h},{merge:true});n.house=h;}catch(e){} }
+  for(const cb of S.caber.filter(x=>normName(x.name)===normName(name))){ try{await setDoc(doc(db,'caber',cb.id),{house:h},{merge:true});cb.house=h;}catch(e){} }
+  clearPPCache();
+  document.getElementById('house-fix-box').style.display='none';
+  toast('Thy house hath been changed to '+capFirst(h)+'! 🛡️');
+  lookupPersonal();
+  renderWelcome();
+}
+window.openHouseFix=openHouseFix;
+window.fixHouse=fixHouse;
+
 // ══ ART ══
 let artFileData=null;
 window.handleArtFile=function(inp){const f=inp.files[0];if(!f)return;artFileData=f;document.getElementById('art-status').textContent='✅ '+f.name+' ready to submit';};
 
 function compressImage(file,mw=800,q=0.72){
-  return new Promise(resolve=>{
+  return new Promise((resolve,reject)=>{
     const r=new FileReader();
-    r.onload=e=>{const img=new Image();img.onload=()=>{const c=document.createElement('canvas');let w=img.width,h=img.height;if(w>mw){h=Math.round(h*mw/w);w=mw;}c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);resolve(c.toDataURL('image/jpeg',q));};img.src=e.target.result;};
+    r.onerror=()=>reject(new Error('Could not read file'));
+    r.onload=e=>{
+      const img=new Image();
+      img.onerror=()=>reject(new Error('Could not load image'));
+      img.onload=()=>{
+        try{
+          const c=document.createElement('canvas');
+          let w=img.width,h=img.height;
+          if(w>mw){h=Math.round(h*mw/w);w=mw;}
+          c.width=w;c.height=h;
+          c.getContext('2d').drawImage(img,0,0,w,h);
+          resolve(c.toDataURL('image/jpeg',q));
+        }catch(err){reject(err);}
+      };
+      img.src=e.target.result;
+    };
     r.readAsDataURL(file);
   });
 }
@@ -550,9 +836,16 @@ async function submitArt(){
   const name=document.getElementById('art-name').value.trim();
   const house=document.getElementById('art-house').value;
   if(!name){toast('Enter thy name!');submitting=false;btn.disabled=false;return;}
+  if(!house){toast('Declare thy house!');submitting=false;btn.disabled=false;return;}
   if(!artFileData){toast('Capture thy masterpiece first!');submitting=false;btn.disabled=false;return;}
   document.getElementById('art-status').textContent='Preparing thy masterpiece...';
-  const b64=await compressImage(artFileData);
+  let b64;
+  try{
+    b64=await compressImage(artFileData);
+  }catch(err){
+    document.getElementById('art-status').textContent='Could not process that image — try another';
+    submitting=false;btn.disabled=false;return;
+  }
   const kb=Math.round(b64.length*0.75/1024);
   document.getElementById('art-status').textContent=`Submitting... (${kb}KB)`;
   try{
@@ -561,17 +854,25 @@ async function submitArt(){
     document.getElementById('art-status').textContent='';
     document.getElementById('art-form').style.display='none';
     document.getElementById('art-success').style.display='block';
-    submitting=false;
+    submitting=false;btn.disabled=false;
   }catch(e){document.getElementById('art-status').textContent='Error: '+e.message;submitting=false;btn.disabled=false;}
 }
 
 function resetArt(){document.getElementById('art-form').style.display='';document.getElementById('art-success').style.display='none';document.getElementById('art-status').textContent='';document.getElementById('art-submit-btn').disabled=false;artFileData=null;autoFillName('art-name',null);}
 
 async function rateArt(artId,stars){
-  const did=getDeviceId();const art=S.art.find(a=>a.id===artId);if(!art)return;
-  const votes={...(art.votes||{}),[did]:stars};
-  const scores=Object.values(votes);
-  await setDoc(doc(db,'art',artId),{votes,totalScore:scores.reduce((s,v)=>s+v,0),voteCount:scores.length},{merge:true});
+  const did=getDeviceId();
+  const art=S.art.find(a=>a.id===artId);if(!art)return;
+  // Atomic field-path update — only touches THIS device's vote, never clobbers others' votes
+  try{
+    await updateDoc(doc(db,'art',artId),{['votes.'+did]:stars});
+  }catch(e){
+    // Fallback for a doc that somehow has no votes map yet
+    await setDoc(doc(db,'art',artId),{votes:{[did]:stars}},{merge:true});
+  }
+  // Update local copy immediately for snappy UI (totals computed on render now)
+  if(!art.votes)art.votes={};
+  art.votes[did]=stars;
   toast('Thy judgement hath been recorded! ⭐');renderArt();
 }
 
@@ -581,11 +882,13 @@ function renderArt(){
   const did=getDeviceId();
   gallery.innerHTML=S.art.map(a=>{
     const myVote=(a.votes||{})[did]||0;
-    const avg=a.voteCount>0?(a.totalScore/a.voteCount).toFixed(1):'-';
+    const voteVals=Object.values(a.votes||{});
+    const vCount=voteVals.length;
+    const avg=vCount>0?(voteVals.reduce((s,v)=>s+v,0)/vCount).toFixed(1):'-';
     return`<div style="margin-bottom:14px;border:2px solid var(--border);border-radius:4px;overflow:hidden;background:#f5e6bf">
       <img src="${a.image}" style="width:100%;display:block;max-height:300px;object-fit:cover"/>
       <div style="padding:10px 12px;background:#f5e6bf">
-        <div style="font-family:'Cinzel',serif;font-size:11px;color:#3d2b0e;margin-bottom:6px">Anonymous Submission · ${a.voteCount||0} votes · Avg: ${avg} ⭐</div>
+        <div style="font-family:'Cinzel',serif;font-size:11px;color:#3d2b0e;margin-bottom:6px">Anonymous Submission · ${vCount} votes · Avg: ${avg} ⭐</div>
         <div style="display:flex;gap:4px;justify-content:center">
           ${[1,2,3,4,5].map(s=>`<button onclick="rateArt('${a.id}',${s})" style="font-size:24px;background:none;border:none;cursor:pointer;opacity:${myVote>=s?'1':'0.2'};padding:4px;transition:opacity 0.2s">⭐</button>`).join('')}
         </div>
@@ -648,7 +951,12 @@ async function submitRiddleAnswer(rid){
   if(!name){toast('Enter thy name!');return;}
   if(!house){toast('Declare thy house!');return;}
   if((S.riddles[rid]||{}).solved){toast('This riddle hath already been solved!');return;}
-  const correct=r.keys.some(k=>ans.includes(k.toLowerCase()));
+  const answerWords=ans.split(/[^a-z0-9]+/).filter(Boolean);
+  const correct=r.keys.some(k=>{
+    const key=k.toLowerCase().trim();
+    if(key.includes(' ')) return ans.includes(key);
+    return answerWords.includes(key);
+  });
   if(!correct){toast('Thy answer is incorrect, mortal! Try again.');haptic([10,10,10]);return;}
   await fsSet('state/riddles',{[rid]:{...(S.riddles[rid]||{}),released:true,solved:true,winnerName:name,winnerHouse:house}});
   await fsSet('state/playerHouses',{[normName(name)]:house});
@@ -746,6 +1054,7 @@ function maesterLogin(){
 }
 
 function renderMaester(){
+  clearPPCache();
   document.getElementById('maester-team').innerHTML=TEAM_EVENTS.map(ev=>{
     const ranking=S.teamRankings[ev.id]||[null,null,null,null];
     return`<div class="admin-row"><div class="admin-ename">${ev.emoji} ${ev.name}</div>
@@ -757,6 +1066,8 @@ function renderMaester(){
   document.getElementById('maester-indiv').innerHTML=lb.length===0?'<div class="muted" style="padding:14px;text-align:center">No individual scores yet</div>':lb.slice(0,30).map((p,i)=>{const h=HOUSES.find(x=>x.id===p.house);return`<div class="lb-row"><div class="lb-rank">${i+1}.</div>${h?`<div class="dot" style="background:${h.color}"></div>`:''}<div class="lb-name">${esc(p.name)}</div><div class="lb-pts" style="color:${h?.color||'var(--ink)'}">${p.pts}</div></div>`;}).join('');
   document.getElementById('maester-arch').innerHTML=S.archery.length===0?'<div class="muted" style="padding:10px 14px">No entries</div>':S.archery.map(a=>`<div class="lb-row"><div class="lb-name">${esc(a.name)}<div class="lb-sub">${capFirst(a.house)} · ${a.score===3?'Bullseye':a.score===2?'1st Ring':'Hit'}</div></div><button class="btn-del" onclick="delEntry('archery','${a.id}')">✕</button></div>`).join('');
   document.getElementById('maester-nail').innerHTML=S.nail.length===0?'<div class="muted" style="padding:10px 14px">No entries</div>':S.nail.map(n=>`<div class="lb-row"><div class="lb-name">${esc(n.name)}<div class="lb-sub">${capFirst(n.house)} · ${n.swings} swings · ${Math.max(0,10-n.swings)}pts</div></div><button class="btn-del" onclick="delEntry('nail','${n.id}')">✕</button></div>`).join('');
+  const cEl=document.getElementById('maester-caber');
+  if(cEl)cEl.innerHTML=S.caber.length===0?'<div class="muted" style="padding:10px 14px">No entries</div>':S.caber.map(cb=>`<div class="lb-row"><div class="lb-name">${esc(cb.name)}<div class="lb-sub">${capFirst(cb.house)} · ${cb.score>0?'Line '+cb.score:'No distance'} · ${cb.score||0}pts</div></div><button class="btn-del" onclick="delEntry('caber','${cb.id}')">✕</button></div>`).join('');
   document.getElementById('maester-duels').innerHTML=S.duels.length===0?'<div class="muted" style="padding:10px 14px">No duels</div>':S.duels.slice().reverse().map(d=>`<div class="lb-row"><div class="lb-name">${esc(d.p1)} vs ${esc(d.p2)}<div class="lb-sub">Wager: ${d.wager}pts · ${d.status}${d.winner?' · Winner: '+esc(d.winner):''}</div></div><button class="btn-del" onclick="delEntry('duels','${d.id}')">✕</button></div>`).join('');
   document.getElementById('maester-riddles').innerHTML=RIDDLES.map(r=>{const rd=S.riddles[r.id]||{};return`<div class="admin-row"><div class="admin-ename" style="font-size:11px;margin-bottom:4px">${r.q.slice(0,55)}...</div><div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center"><button class="btn-sm ${rd.released?'':'btn-green'}" onclick="toggleRiddle('${r.id}',${!rd.released})">${rd.released?'🔒 Lock':'🔓 Release'}</button><button class="btn-sm" onclick="toggleHint('${r.id}',${!rd.hintRevealed})">${rd.hintRevealed?'Hide Hint':'💡 Hint'}</button>${rd.solved?`<span class="muted" style="font-size:11px">✅ ${esc(rd.winnerName)}</span>`:'<span class="muted" style="font-size:11px">Unsolved</span>'}</div></div>`;}).join('');
   // Best dressed results
@@ -768,7 +1079,22 @@ function renderMaester(){
     ?'<div class="muted" style="padding:14px;text-align:center">No votes yet — the realm has not spoken</div>'
     :bdSorted.map(([name,votes],i)=>`<div class="lb-row"><div class="lb-rank">${i+1}.</div><div class="lb-name" style="color:var(--ink)">${esc(name)}</div><div class="lb-pts" style="color:${i===0?'var(--lion)':'var(--ink)'}">${votes} vote${votes>1?'s':''}${i===0?' 👑':''}</div></div>`).join('');
 
-  document.getElementById('maester-art').innerHTML=S.art.length===0?'<div class="muted" style="padding:14px;text-align:center">No submissions yet</div>':S.art.map((a,i)=>{const avg=a.voteCount>0?(a.totalScore/a.voteCount).toFixed(2):'-';return`<div style="margin-bottom:12px;border:2px solid var(--border);border-radius:4px;overflow:hidden;background:var(--parchment)"><img src="${a.image}" style="width:100%;display:block;max-height:180px;object-fit:cover"/><div style="padding:8px 12px"><div style="font-weight:600;color:var(--ink);font-size:14px">#${i+1} — ${esc(a.submitterName)} · ${capFirst(a.submitterHouse||'?')}</div><div class="muted" style="font-size:11px">${a.voteCount||0} votes · Avg: ${avg} ⭐ · Scores: ${Object.values(a.votes||{}).join(', ')||'none'}</div><button class="btn-del" style="margin-top:6px" onclick="delEntry('art','${a.id}')">✕ Remove</button></div></div>`;}).join('');
+  // Locks status
+  const lockArtEl=document.getElementById('maester-lock-art');
+  if(lockArtEl){
+    const la=(S.locks||{}).art;
+    lockArtEl.innerHTML=la?`<div class="lb-row"><div class="lb-name" style="color:var(--ink)">🎨 ${esc(la.name)} · House ${capFirst(la.house||'?')}<div class="lb-sub">+${WINNER_BONUS} honour locked in</div></div><button class="btn-del" onclick="unlockWinner('art')">✕</button></div>`:'<div class="muted" style="padding:8px 14px">Not yet locked — tap below to crown the top-rated artwork</div>';
+  }
+  const lockBdEl=document.getElementById('maester-lock-bd');
+  if(lockBdEl){
+    const lb=(S.locks||{}).bestDressed;
+    lockBdEl.innerHTML=lb?`<div class="lb-row"><div class="lb-name" style="color:var(--ink)">👑 ${esc(lb.name)} · ${lb.house?'House '+capFirst(lb.house):'house unknown'}<div class="lb-sub">+${WINNER_BONUS} honour locked in</div></div><button class="btn-del" onclick="unlockWinner('bestDressed')">✕</button></div>`:'<div class="muted" style="padding:8px 14px">Not yet locked — tap below to crown the most-voted guest</div>';
+  }
+  // Grants list
+  const grEl=document.getElementById('maester-grants');
+  if(grEl)grEl.innerHTML=(S.grants||[]).length===0?'<div class="muted" style="padding:8px 14px">No grants yet</div>':S.grants.slice().reverse().map(g=>`<div class="lb-row"><div class="lb-name" style="color:var(--ink)">${esc(g.name)}<div class="lb-sub">${g.pts>0?'+':''}${g.pts} honour${g.house?' · House '+capFirst(g.house):''}</div></div><button class="btn-del" onclick="delEntry('grants','${g.id}')">✕</button></div>`).join('');
+
+  document.getElementById('maester-art').innerHTML=S.art.length===0?'<div class="muted" style="padding:14px;text-align:center">No submissions yet</div>':S.art.map((a,i)=>{const vv=Object.values(a.votes||{});const vc=vv.length;const avg=vc>0?(vv.reduce((s,v)=>s+v,0)/vc).toFixed(2):'-';return`<div style="margin-bottom:12px;border:2px solid var(--border);border-radius:4px;overflow:hidden;background:var(--parchment)"><img src="${a.image}" style="width:100%;display:block;max-height:180px;object-fit:cover"/><div style="padding:8px 12px"><div style="font-weight:600;color:var(--ink);font-size:14px">#${i+1} — ${esc(a.submitterName)} · ${capFirst(a.submitterHouse||'?')}</div><div class="muted" style="font-size:11px">${vc} votes · Avg: ${avg} ⭐ · Scores: ${vv.join(', ')||'none'}</div><button class="btn-del" style="margin-top:6px" onclick="delEntry('art','${a.id}')">✕ Remove</button></div></div>`;}).join('');
 }
 
 async function setRank(eid,p,hid){const r=[...(S.teamRankings[eid]||[null,null,null,null])];const ex=r.indexOf(hid);if(ex!==-1)r[ex]=null;r[p]=r[p]===hid?null:hid;S.teamRankings[eid]=r;await fsSet('state/teamRankings',{[eid]:r});renderMaester();}
@@ -777,24 +1103,125 @@ async function addBonus(){const h=document.getElementById('bonus-house').value;c
 async function delEntry(col,id){showModal('Remove Entry','Art thou certain this entry should be struck from the scrolls?','Remove It',async()=>{await fsDel(col,id);toast('Entry struck from the record');if(adminUnlocked)renderMaester();});}
 async function toggleRiddle(rid,val){await fsSet('state/riddles',{[rid]:{...(S.riddles[rid]||{}),released:val}});renderMaester();toast(val?'Riddle released to the realm!':'Riddle sealed');}
 async function toggleHint(rid,val){await fsSet('state/riddles',{[rid]:{...(S.riddles[rid]||{}),hintRevealed:val}});renderMaester();renderRiddles();toast(val?'Hint revealed!':'Hint hidden');}
-async function confirmReset(){showModal('Reset Tournament','This will wipe ALL scrolls — every score, duel, vote, riddle and entry — for eternity. Art thou absolutely certain?','Wipe the Scrolls',async()=>{
+// ── Grant honour to an individual (petitions / at whim) ──
+function grantNameInput(val){
+  const sug=document.getElementById('grant-sug');
+  const m=fuzzyMatch(val,GUESTS);
+  if(!val||!m.length){sug.style.display='none';return;}
+  sug.innerHTML=m.map(n=>`<div data-n="${esc(n)}">${n}</div>`).join('');
+  sug.style.display='block';
+  sug.querySelectorAll('div').forEach(d=>d.addEventListener('click',()=>{document.getElementById('grant-name').value=d.dataset.n;sug.style.display='none';}));
+}
+
+async function grantPoints(){
+  const name=document.getElementById('grant-name').value.trim();
+  const pts=parseInt(document.getElementById('grant-pts').value);
+  if(!name){toast('Name the warrior to be granted honour');return;}
+  if(isNaN(pts)||pts===0){toast('Enter a points amount');return;}
+  const house=S.playerHouses[normName(name)]||null;
+  await fsAdd('grants',{name,house,pts});
+  clearPPCache();
+  toast(`${pts>0?'+':''}${pts} honour granted to ${name}${house?' (House '+capFirst(house)+')':''}`);
+  document.getElementById('grant-name').value='';
+  document.getElementById('grant-pts').value='';
+  if(adminUnlocked)renderMaester();
+}
+
+// ── Lock in Art winner (app picks highest average rating) ──
+async function lockArtWinner(){
+  if(!S.art.length){toast('No art submissions to judge');return;}
+  // Highest average rating, tiebreak by vote count
+  let best=null,bestAvg=-1,bestVotes=-1;
+  S.art.forEach(a=>{
+    const vv=Object.values(a.votes||{});
+    if(!vv.length)return;
+    const avg=vv.reduce((s,v)=>s+v,0)/vv.length;
+    if(avg>bestAvg||(avg===bestAvg&&vv.length>bestVotes)){best=a;bestAvg=avg;bestVotes=vv.length;}
+  });
+  if(!best){toast('No votes cast yet — cannot crown a winner');return;}
+  showModal('Lock In Art Champion',`Award ${WINNER_BONUS} honour to ${best.submitterName} (House ${capFirst(best.submitterHouse||'?')}) for the finest masterpiece? This locks in the winner.`,'Crown the Champion',async()=>{
+    await fsSet('state/locks',{art:{name:best.submitterName,house:best.submitterHouse||null,avg:bestAvg.toFixed(2)}});
+    S.locks=S.locks||{};S.locks.art={name:best.submitterName,house:best.submitterHouse||null};
+    clearPPCache();
+    toast(`🎨 ${best.submitterName} crowned Art Champion! +${WINNER_BONUS} to them & their house`);
+    renderMaester();
+  });
+}
+
+// ── Lock in Best Dressed winner (most votes) ──
+async function lockBestDressedWinner(){
+  const tally={};
+  (S.bestDressed||[]).forEach(v=>{if(v.name)tally[v.name]=(tally[v.name]||0)+1;});
+  const sorted=Object.entries(tally).sort((a,b)=>b[1]-a[1]);
+  if(!sorted.length){toast('No votes cast yet — cannot crown a winner');return;}
+  const winnerName=sorted[0][0];
+  const winnerVotes=sorted[0][1];
+  const house=S.playerHouses[normName(winnerName)]||null;
+  showModal('Lock In Best Dressed',`Award ${WINNER_BONUS} honour to ${winnerName} (${house?'House '+capFirst(house):'house unknown'}) with ${winnerVotes} vote(s) for the finest attire? This locks in the winner.`,'Crown the Champion',async()=>{
+    await fsSet('state/locks',{bestDressed:{name:winnerName,house}});
+    S.locks=S.locks||{};S.locks.bestDressed={name:winnerName,house};
+    clearPPCache();
+    toast(`👑 ${winnerName} crowned Best Dressed! +${WINNER_BONUS} to them & their house`);
+    renderMaester();
+  });
+}
+
+// ── Unlock (undo) a winner lock ──
+async function unlockWinner(which){
+  showModal('Remove Winner Lock','Remove this locked winner and their '+WINNER_BONUS+' honour bonus?','Remove It',async()=>{
+    const locks={...(S.locks||{})};
+    delete locks[which];
+    await setDoc(doc(db,'state','locks'),locks);
+    S.locks=locks;
+    clearPPCache();
+    toast('Winner lock removed');
+    renderMaester();
+  });
+}
+
+async function confirmReset(){showModal('Reset Tournament','This will wipe EVERYTHING — every score, duel, vote, riddle, photo, personal point and saved identity on this device — for eternity. Art thou absolutely certain?','Wipe Everything',async()=>{
+  const btn=document.querySelector('#cs-danger .btn-danger');
+  if(btn){btn.disabled=true;btn.textContent='Wiping the scrolls...';}
   try{
-    const cols=['archery','nail','duels','art','bestDressed','photo_test'];
+    // 1. Delete every document in every collection
+    const cols=['archery','nail','caber','duels','art','bestDressed','grants','photo_test'];
     for(const col of cols){
-      const s=await getDocs(collection(db,col));
-      for(const d of s.docs)await deleteDoc(d.ref);
+      const snap=await getDocs(collection(db,col));
+      for(const d of snap.docs){
+        try{ await deleteDoc(d.ref); }catch(e){}
+      }
     }
+    // 2. Reset all state documents to empty/zero
     await setDoc(doc(db,'state','teamRankings'),{});
     await setDoc(doc(db,'state','eggs'),{dragon:0,wolf:0,snake:0,lion:0});
     await setDoc(doc(db,'state','bonus'),{dragon:0,wolf:0,snake:0,lion:0});
     await setDoc(doc(db,'state','playerHouses'),{});
     await setDoc(doc(db,'state','riddles'),{});
-    S.archery=[];S.nail=[];S.duels=[];S.art=[];S.bestDressed=[];
+    await setDoc(doc(db,'state','redemptions'),{});
+    await setDoc(doc(db,'state','locks'),{});
+    // 3. Clear local in-memory state (resets personal points — they derive from this)
+    S.archery=[];S.nail=[];S.caber=[];S.duels=[];S.art=[];S.bestDressed=[];S.grants=[];
     S.teamRankings={};S.eggs={dragon:0,wolf:0,snake:0,lion:0};
     S.bonus={dragon:0,wolf:0,snake:0,lion:0};S.playerHouses={};S.riddles={};
-    toast('The scrolls have been wiped clean');
-    renderMaester();renderScoreboard();
-  }catch(e){toast('Reset error: '+e.message);}
+    S.redemptions={};S.locks={};
+    clearPPCache();
+    // 4. Wipe ALL device memory / localStorage (name, house, frequency, device id, dismissed alerts)
+    try{
+      localStorage.removeItem('wt_name');
+      localStorage.removeItem('wt_house');
+      localStorage.removeItem('wt_freq');
+      localStorage.removeItem('wt_alerted_duels');
+      localStorage.removeItem('device_id');
+      localStorage.removeItem('wt_did');
+    }catch(e){}
+    toast('All scrolls and memory wiped clean');
+    // 5. Re-render everything fresh
+    renderMaester();renderScoreboard();renderWelcome();updateDuelBadge();
+    if(btn){btn.disabled=false;btn.textContent='Wipe All Scrolls — Reset Tournament';}
+  }catch(e){
+    toast('Reset error: '+e.message);
+    if(btn){btn.disabled=false;btn.textContent='Wipe All Scrolls — Reset Tournament';}
+  }
 });}
 
 // ══ PUBLIC QR PAGE ══
@@ -813,12 +1240,14 @@ function handleParams(){const p=new URLSearchParams(window.location.search);cons
 window.showView=showView;
 window.setArchHouse=setArchHouse;window.setArchScore=setArchScore;window.submitArchery=submitArchery;window.resetArch=resetArch;
 window.setNailHouse=setNailHouse;window.submitNail=submitNail;window.resetNail=resetNail;
+window.setCaberHouse=setCaberHouse;window.setCaberScore=setCaberScore;window.submitCaber=submitCaber;window.resetCaber=resetCaber;window.renderCaberBoard=renderCaberBoard;
 window.issueDuel=issueDuel;window.confirmDuel=confirmDuel;window.declineDuel=declineDuel;window.claimDuel=claimDuel;
 window.lookupPersonal=lookupPersonal;
 window.submitArt=submitArt;window.resetArt=resetArt;window.rateArt=rateArt;
 window.renderRiddles=renderRiddles;window.submitRiddleAnswer=submitRiddleAnswer;window.riddleNameInput=riddleNameInput;
 window.submitBestDressedVote=submitBestDressedVote; window.resetBestDressed=resetBestDressed;
 window.maesterLogin=maesterLogin;window.setRank=setRank;window.addEggs=addEggs;window.addBonus=addBonus;window.delEntry=delEntry;window.toggleRiddle=toggleRiddle;window.toggleHint=toggleHint;window.confirmReset=confirmReset;
+window.grantNameInput=grantNameInput;window.grantPoints=grantPoints;window.lockArtWinner=lockArtWinner;window.lockBestDressedWinner=lockBestDressedWinner;window.unlockWinner=unlockWinner;
 window.hideModal=hideModal;
 
 await loadAll();
@@ -827,6 +1256,15 @@ renderWelcome();
 updateDuelBadge();
 handleParams();
 if(currentView==='scoreboard')renderScoreboard();
+
+// If already checked in (returning user), skip the wizard entirely
+if(getMyName()&&getMyHouse()){
+  const wz=document.getElementById('wizard');
+  if(wz) wz.style.display='none';
+} else {
+  // New user — wizard starts at step 0 (welcome), which is its default visible state
+  wizShow(0);
+}
 
 
 document.addEventListener('click',e=>{if(!e.target.closest('.input-wrap'))document.querySelectorAll('.suggestions').forEach(s=>s.style.display='none');});
@@ -1103,6 +1541,35 @@ input[type=file]{display:none;}
 .page-title h1{font-family:'Cinzel',serif;font-size:18px;font-weight:900;color:var(--parchment);text-shadow:0 2px 8px rgba(0,0,0,0.8);letter-spacing:0.05em;line-height:1.25;}
 .page-title p{color:var(--gold2);font-style:italic;font-size:12px;margin-top:4px;}
 
+/* ── ONBOARDING WIZARD ── */
+.wz-step{animation:wzFade 0.4s ease}
+@keyframes wzFade{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.wz-icon{font-size:42px;text-align:center;margin-bottom:6px}
+.wz-title{font-family:'Cinzel',serif;font-size:21px;font-weight:900;color:#f2e8d0;text-align:center;letter-spacing:0.05em}
+.wz-sub{font-family:'Crimson Text',serif;font-size:14px;color:rgba(230,210,150,0.6);font-style:italic;text-align:center;margin-top:4px}
+.wz-input{width:100%;padding:13px 16px;border:2px solid #c8941a;border-radius:3px;background:rgba(245,230,191,0.95);font-family:'Crimson Text',serif;font-size:18px;color:#1c0f05;outline:none;text-align:center}
+.wz-input:focus{border-color:#e6b830;background:#f5e6bf}
+.wz-btn{display:block;width:100%;margin-top:16px;padding:14px;background:linear-gradient(180deg,#c8941a,#9a6f12);color:#1c0f05;border:2px solid #e6b830;font-family:'Cinzel',serif;font-size:14px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer;border-radius:3px;transition:all 0.15s;box-shadow:0 4px 16px rgba(200,148,26,0.3)}
+.wz-btn:hover{background:linear-gradient(180deg,#e6b830,#c8941a);box-shadow:0 4px 22px rgba(230,184,48,0.5)}
+.wz-skip{display:block;width:100%;margin-top:10px;padding:8px;background:transparent;color:rgba(230,210,150,0.5);border:none;font-family:'Cinzel',serif;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;cursor:pointer}
+.wz-skip:hover{color:rgba(230,210,150,0.8)}
+.wz-err{color:#e74c3c;font-family:'Crimson Text',serif;font-size:13px;font-style:italic;text-align:center;min-height:18px;margin-top:8px}
+.wz-house{display:flex;flex-direction:column;align-items:center;gap:6px;padding:16px 8px;border:2px solid;border-radius:4px;background:rgba(0,0,0,0.3);cursor:pointer;transition:all 0.15s}
+.wz-house img{width:54px;height:54px;object-fit:contain}
+.wz-house span{font-family:'Cinzel',serif;font-size:12px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase}
+.wz-house.dragon{border-color:#c0392b}.wz-house.dragon span{color:#d4423a}
+.wz-house.wolf{border-color:#2471a3}.wz-house.wolf span{color:#3a7abf}
+.wz-house.snake{border-color:#1e8449}.wz-house.snake span{color:#2a9a55}
+.wz-house.lion{border-color:#b7770d}.wz-house.lion span{color:#d4901a}
+.wz-house.sel{box-shadow:0 0 0 3px rgba(230,184,48,0.5);transform:scale(1.03)}
+.wz-house.sel.dragon{background:rgba(192,57,43,0.3)}
+.wz-house.sel.wolf{background:rgba(36,113,163,0.3)}
+.wz-house.sel.snake{background:rgba(30,132,73,0.3)}
+.wz-house.sel.lion{background:rgba(183,119,13,0.3)}
+.wz-tut-body{font-family:'Crimson Text',serif;font-size:15px;color:#e8dcc0;line-height:1.6;margin-top:14px;text-align:left}
+.wz-tut-body p{margin-bottom:10px}
+.wz-tut-body strong{color:#e6b830}
+
 /* ── LOADING ── */
 #loading{position:fixed;inset:0;background:rgba(8,3,1,0.92);display:flex;align-items:center;justify-content:center;z-index:9999;flex-direction:column;gap:14px;}
 #loading p{font-family:'Cinzel',serif;font-size:13px;color:var(--parchment);letter-spacing:0.1em;}
@@ -1140,6 +1607,7 @@ input[type=file]{display:none;}
   <button class="nav-btn active" id="nav-scoreboard" onclick="showView('scoreboard')">⚔ Standings</button>
   <button class="nav-btn" id="nav-archery"  onclick="showView('archery')">🏹 Archery</button>
   <button class="nav-btn" id="nav-nail"     onclick="showView('nail')">🔨 Nail Log</button>
+  <button class="nav-btn" id="nav-caber"    onclick="showView('caber')">🪵 Caber</button>
   <button class="nav-btn" id="nav-duel" style="position:relative" onclick="showView('duel')">⚔ Duels<div class="nav-badge" id="duel-badge" style="display:none">0</div></button>
   <button class="nav-btn" id="nav-personal" onclick="showView('personal')">👤 My Honour</button>
   <button class="nav-btn" id="nav-art"      onclick="showView('art')">🎨 Art</button>
@@ -1202,6 +1670,26 @@ input[type=file]{display:none;}
   </div>
 </div>
 
+<!-- ══ CABER TOSS ══ -->
+<div id="view-caber" class="view">
+  <div class="content">
+    <div class="page-title"><h1>🪵 Caber Toss</h1><p>Heave the log · the further it flies, the more honour</p></div>
+    <div class="parchment">
+      <div id="caber-form">
+        <div style="height:12px"></div>
+        <div class="form-group"><label class="form-label" style="padding:0 14px">Thy Name</label><div class="input-wrap"><input class="form-input" type="text" id="caber-name" placeholder="Begin typing..." autocomplete="off"/><div class="suggestions" id="caber-sug" style="display:none"></div></div></div>
+        <div class="form-group"><label class="form-label" style="padding:0 14px">Thy House</label><div class="house-picker"><button class="hpick-btn caber-house-btn dragon" onclick="setCaberHouse('dragon')"><span class="pe">🐉</span>Dragon</button><button class="hpick-btn caber-house-btn wolf" onclick="setCaberHouse('wolf')"><span class="pe">🐺</span>Wolf</button><button class="hpick-btn caber-house-btn snake" onclick="setCaberHouse('snake')"><span class="pe">🐍</span>Snake</button><button class="hpick-btn caber-house-btn lion" onclick="setCaberHouse('lion')"><span class="pe">🦁</span>Lion</button></div></div>
+        <div class="form-group"><label class="form-label" style="padding:0 14px">How Far Did It Fly?</label><div class="arch-shot-grid"><button class="arch-shot-btn caber-line-btn" onclick="setCaberScore(3,this)"><span class="ai">🪵</span>3rd Line<br><small style="font-size:10px">3 pts</small></button><button class="arch-shot-btn caber-line-btn" onclick="setCaberScore(2,this)"><span class="ai">🪵</span>2nd Line<br><small style="font-size:10px">2 pts</small></button><button class="arch-shot-btn caber-line-btn" onclick="setCaberScore(1,this)"><span class="ai">🪵</span>1st Line<br><small style="font-size:10px">1 pt</small></button></div><div style="padding:8px 14px 0"><button class="arch-shot-btn caber-line-btn" style="width:100%" onclick="setCaberScore(0,this)">Didn't reach the first line — 0 pts</button></div></div>
+        <button class="btn-primary" id="caber-submit-btn" onclick="submitCaber()">Record My Toss</button>
+        <div style="height:14px"></div>
+      </div>
+      <div class="success-block" id="caber-success"><div class="s-icon">🪵</div><h2>Toss Recorded!</h2><p id="caber-success-txt"></p><button class="btn-primary" style="margin-top:14px" onclick="resetCaber()">Toss Again</button><div style="height:14px"></div></div>
+    </div>
+    <div class="parchment"><div class="section-title">🪵 House Rankings</div><div id="caber-board"></div></div>
+    <div class="parchment"><div class="section-title">Individual Tosses</div><div id="caber-solo-board"></div></div>
+  </div>
+</div>
+
 <!-- ══ DUELS ══ -->
 <div id="view-duel" class="view">
   <div class="content">
@@ -1237,6 +1725,16 @@ input[type=file]{display:none;}
           <div style="font-family:'Cinzel',serif;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:var(--ink-light)">Personal Honour</div>
           <div class="personal-pts" id="personal-pts-val">0</div>
           <div class="personal-house-badge" id="personal-house-badge"></div>
+          <div style="margin-top:10px"><span onclick="openHouseFix()" style="font-size:12px;font-style:italic;color:var(--ink-light);text-decoration:underline;cursor:pointer">Wrong house? Tap to change</span></div>
+          <div id="house-fix-box" style="display:none;margin-top:10px;padding:10px;background:rgba(122,85,16,0.08);border-radius:4px">
+            <div style="font-family:'Cinzel',serif;font-size:10px;color:var(--ink-light);margin-bottom:8px;letter-spacing:0.06em">CHOOSE THY TRUE HOUSE</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+              <button class="hpick-btn dragon" onclick="fixHouse('dragon')"><span class="pe">🐉</span>Dragon</button>
+              <button class="hpick-btn wolf" onclick="fixHouse('wolf')"><span class="pe">🐺</span>Wolf</button>
+              <button class="hpick-btn snake" onclick="fixHouse('snake')"><span class="pe">🐍</span>Snake</button>
+              <button class="hpick-btn lion" onclick="fixHouse('lion')"><span class="pe">🦁</span>Lion</button>
+            </div>
+          </div>
         </div>
         <div class="section-title" style="font-size:10px">Honour Breakdown</div>
         <div id="personal-breakdown"></div>
@@ -1339,7 +1837,7 @@ input[type=file]{display:none;}
           <circle cx="45" cy="15" r="2.5" fill="#e6a817" opacity="0.5"/><circle cx="16" cy="44" r="2.5" fill="#e6a817" opacity="0.5"/><circle cx="74" cy="44" r="2.5" fill="#e6a817" opacity="0.5"/><circle cx="45" cy="73" r="2.5" fill="#e6a817" opacity="0.5"/>
         </svg>
         <div style="font-family:'Cinzel',serif;font-size:13px;font-weight:700;color:var(--ink);margin-bottom:12px">Speak the Sacred Password</div>
-        <input class="form-input" type="password" id="maester-pw" placeholder="• • • •" style="text-align:center;margin-bottom:12px"/>
+        <input class="form-input" type="password" id="maester-pw" placeholder="Speak thy secret word" style="text-align:center;margin-bottom:12px"/>
         <button class="btn-primary" style="margin:0" onclick="maesterLogin()">Enter the Sanctum</button>
         <div style="height:14px"></div>
       </div>
@@ -1357,8 +1855,36 @@ input[type=file]{display:none;}
       </div>
 
       <div class="parchment">
-        <div class="collapse-header open" onclick="toggleSection('cs-bonus')"><span class="ch-title">✨ Manual Honour Points</span><span class="ch-arrow">▼</span></div>
-        <div class="collapse-body open" id="cs-bonus"><div class="admin-row"><div class="bonus-row"><select id="bonus-house"><option value="dragon">🐉 Dragon</option><option value="wolf">🐺 Wolf</option><option value="snake">🐍 Snake</option><option value="lion">🦁 Lion</option></select><input type="number" id="bonus-pts" placeholder="pts" value="1"/><button class="btn-sm" onclick="addBonus()">+ Add</button></div></div></div>
+        <div class="collapse-header open" onclick="toggleSection('cs-bonus')"><span class="ch-title">✨ Manual House Points</span><span class="ch-arrow">▼</span></div>
+        <div class="collapse-body open" id="cs-bonus"><div class="admin-row"><div class="muted" style="margin-bottom:6px">Add/subtract points to a whole HOUSE</div><div class="bonus-row"><select id="bonus-house"><option value="dragon">🐉 Dragon</option><option value="wolf">🐺 Wolf</option><option value="snake">🐍 Snake</option><option value="lion">🦁 Lion</option></select><input type="number" id="bonus-pts" placeholder="pts" value="1"/><button class="btn-sm" onclick="addBonus()">+ Add</button></div></div></div>
+      </div>
+
+      <div class="parchment">
+        <div class="collapse-header open" onclick="toggleSection('cs-grant')"><span class="ch-title">📜 Grant Honour to a Person</span><span class="ch-arrow">▼</span></div>
+        <div class="collapse-body open" id="cs-grant">
+          <div class="admin-row">
+            <div class="muted" style="margin-bottom:6px">For petitions or at whim — adds to the person AND their house</div>
+            <div class="input-wrap" style="margin-bottom:6px"><input class="form-input" type="text" id="grant-name" placeholder="Warrior's name..." autocomplete="off" oninput="grantNameInput(this.value)" style="font-size:15px;padding:8px 10px"/><div class="suggestions" id="grant-sug" style="display:none"></div></div>
+            <div class="bonus-row"><input type="number" id="grant-pts" placeholder="pts" value="3" style="width:70px"/><button class="btn-sm" onclick="grantPoints()">Grant Honour</button></div>
+            <div style="margin-top:8px" id="maester-grants"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="parchment">
+        <div class="collapse-header open" onclick="toggleSection('cs-crown')"><span class="ch-title">🏆 Crown Champions (+15 each)</span><span class="ch-arrow">▼</span></div>
+        <div class="collapse-body open" id="cs-crown">
+          <div class="admin-row">
+            <div class="admin-ename">🎨 Art Champion</div>
+            <div id="maester-lock-art"></div>
+            <button class="btn-sm btn-green" style="margin-top:6px" onclick="lockArtWinner()">Lock In Top-Rated Artwork</button>
+          </div>
+          <div class="admin-row">
+            <div class="admin-ename">👑 Best Dressed Champion</div>
+            <div id="maester-lock-bd"></div>
+            <button class="btn-sm btn-green" style="margin-top:6px" onclick="lockBestDressedWinner()">Lock In Most-Voted Guest</button>
+          </div>
+        </div>
       </div>
 
       <div class="parchment">
@@ -1392,6 +1918,11 @@ input[type=file]{display:none;}
       </div>
 
       <div class="parchment">
+        <div class="collapse-header" onclick="toggleSection('cs-caber')"><span class="ch-title">🪵 Caber Toss Entries</span><span class="ch-arrow">▼</span></div>
+        <div class="collapse-body" id="cs-caber"><div id="maester-caber"></div></div>
+      </div>
+
+      <div class="parchment">
         <div class="collapse-header" onclick="toggleSection('cs-duels')"><span class="ch-title">⚔ All Duels</span><span class="ch-arrow">▼</span></div>
         <div class="collapse-body" id="cs-duels"><div id="maester-duels"></div></div>
       </div>
@@ -1421,13 +1952,74 @@ input[type=file]{display:none;}
   </div>
 </div>
 
-<!-- AUDIO UNLOCK SPLASH -->
-<div id="audio-splash" style="position:fixed;inset:0;background:rgba(8,3,1,0.97);z-index:99999;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;cursor:pointer" onclick="unlockAudio()">
-  <div style="font-size:48px;animation:tflame 2s ease-in-out infinite alternate">🔥</div>
-  <div style="font-family:'Cinzel',serif;font-size:22px;font-weight:900;color:#f2e8d0;letter-spacing:0.1em;text-align:center;line-height:1.3">⚔ William's<br>Tournament ⚔</div>
-  <div style="font-family:'Cinzel',serif;font-size:11px;color:#c8941a;letter-spacing:0.12em;text-transform:uppercase;margin-top:4px">Tap to Enter the Realm</div>
-  <div style="width:60px;height:1px;background:linear-gradient(90deg,transparent,#c8941a,transparent)"></div>
-  <div style="font-family:'Crimson Text',serif;font-size:13px;color:rgba(230,210,150,0.5);font-style:italic">21st Birthday · House Championship</div>
+<!-- ONBOARDING WIZARD / CHECK-IN -->
+<div id="wizard" style="position:fixed;inset:0;background:rgba(8,3,1,0.98);z-index:99999;display:flex;align-items:center;justify-content:center;flex-direction:column;padding:24px;overflow-y:auto">
+  <div style="max-width:420px;width:100%;margin:auto">
+
+    <!-- STEP 0: Welcome / audio unlock -->
+    <div class="wz-step" id="wz-0" style="text-align:center">
+      <div style="font-size:52px;animation:tflame 2s ease-in-out infinite alternate">🔥</div>
+      <div style="font-family:'Cinzel',serif;font-size:24px;font-weight:900;color:#f2e8d0;letter-spacing:0.08em;line-height:1.3;margin-top:10px">⚔ William's<br>Tournament ⚔</div>
+      <div style="font-family:'Crimson Text',serif;font-size:14px;color:rgba(230,210,150,0.6);font-style:italic;margin-top:8px">21st Birthday · House Championship</div>
+      <div style="width:80px;height:1px;background:linear-gradient(90deg,transparent,#c8941a,transparent);margin:18px auto"></div>
+      <button class="wz-btn" onclick="wizardEnter()">Enter the Realm ⚔</button>
+    </div>
+
+    <!-- STEP 1: Name -->
+    <div class="wz-step" id="wz-1" style="display:none">
+      <div class="wz-icon">📜</div>
+      <div class="wz-title">Declare Thy Name</div>
+      <div class="wz-sub">Find thyself upon the royal scroll</div>
+      <div class="input-wrap" style="margin-top:16px">
+        <input class="wz-input" type="text" id="wz-name" placeholder="Begin typing thy name..." autocomplete="off"/>
+        <div class="suggestions" id="wz-name-sug" style="display:none"></div>
+      </div>
+      <div id="wz-name-err" class="wz-err"></div>
+      <button class="wz-btn" onclick="wizardName()">Continue →</button>
+    </div>
+
+    <!-- STEP 2: House -->
+    <div class="wz-step" id="wz-2" style="display:none">
+      <div class="wz-icon">🛡️</div>
+      <div class="wz-title">Choose Thy House</div>
+      <div class="wz-sub">Pledge thy allegiance — fight for their glory</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px">
+        <button class="wz-house dragon" onclick="wizardHouse('dragon',this)"><img src="house_dragon_transparent.png" alt="Dragon"/><span>Dragon</span></button>
+        <button class="wz-house wolf" onclick="wizardHouse('wolf',this)"><img src="house_wolf_transparent.png" alt="Wolf"/><span>Wolf</span></button>
+        <button class="wz-house snake" onclick="wizardHouse('snake',this)"><img src="house_snake_transparent.png" alt="Snake"/><span>Snake</span></button>
+        <button class="wz-house lion" onclick="wizardHouse('lion',this)"><img src="house_lion_transparent.png" alt="Lion"/><span>Lion</span></button>
+      </div>
+      <div id="wz-house-err" class="wz-err"></div>
+      <button class="wz-btn" onclick="wizardHouseNext()">Continue →</button>
+    </div>
+
+    <!-- STEP 3: Tutorial intro -->
+    <div class="wz-step" id="wz-3" style="display:none">
+      <div class="wz-icon">⚔</div>
+      <div class="wz-title">How the Tournament Works</div>
+      <div class="wz-tut-body">
+        <p>Two paths to glory await thee:</p>
+        <p>🏰 <strong>House Competitions</strong> — team events like Tug of War and Jousting earn honour for thy whole house.</p>
+        <p>👤 <strong>Personal Challenges</strong> — archery, riddles, duels and more earn honour for <em>thee</em>, which also adds to thy house's total.</p>
+        <p>The house with the most honour by Sunday's end is crowned champion! 👑</p>
+      </div>
+      <button class="wz-btn" onclick="wizardTutStep(4)">Show me the stations →</button>
+      <button class="wz-skip" onclick="wizardFinish()">Skip tutorial</button>
+    </div>
+
+    <!-- STEP 4+: Tab walkthrough (dynamic) -->
+    <div class="wz-step" id="wz-4" style="display:none">
+      <div class="wz-icon" id="wz-tut-icon">🏹</div>
+      <div class="wz-title" id="wz-tut-title">Archery</div>
+      <div class="wz-tut-body"><p id="wz-tut-text">...</p></div>
+      <div style="display:flex;gap:8px;align-items:center;justify-content:center;margin:14px 0">
+        <span id="wz-tut-progress" style="font-family:'Cinzel',serif;font-size:11px;color:#c8941a"></span>
+      </div>
+      <button class="wz-btn" onclick="wizardTutNext()" id="wz-tut-next">Next →</button>
+      <button class="wz-skip" onclick="wizardFinish()">Skip the rest</button>
+    </div>
+
+  </div>
 </div>
 
 <div id="loading"><div class="spinner"></div><p>The Scrolls Are Being Fetched...</p></div>

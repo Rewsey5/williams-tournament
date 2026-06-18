@@ -297,6 +297,8 @@ async function refreshAllData(force){
 // ══ POINTS ══
 function housePoints(){
   const pts={dragon:0,wolf:0,snake:0,lion:0};
+  // Starting honour — every checked-in member brings their 5 starting points to their house
+  Object.values(S.playerHouses||{}).forEach(hid=>{ if(pts[hid]!==undefined)pts[hid]+=STARTING_PTS; });
   // Team events — ranked 30/20/10/0
   TEAM_EVENTS.forEach(ev=>{ const r=S.teamRankings[ev.id]; if(!r)return; r.forEach((hid,i)=>{ if(hid&&pts[hid]!==undefined)pts[hid]+=RANK_PTS[i]; }); });
   // Archery — every point earned goes straight to the house (clear-cut, no average)
@@ -573,11 +575,11 @@ async function submitArchery(){
 function resetArch(){document.getElementById('arch-form').style.display='';document.getElementById('arch-success').style.display='none';document.getElementById('arch-submit-btn').disabled=false;archSelScore=null;archSelHouse=null;document.querySelectorAll('.arch-house-btn,.arch-shot-btn').forEach(b=>b.classList.remove('sel'));autoFillName('arch-name',h=>setArchHouse(h));}
 function renderArcheryBoard(){
   autoFillName('arch-name',h=>setArchHouse(h));
-  const sorted=HOUSES.map(h=>({h,shots:S.archery.filter(a=>a.house===h.id)})).sort((a,b)=>{const aa=a.shots.length?a.shots.reduce((s,x)=>s+x.score,0)/a.shots.length:0;const bb=b.shots.length?b.shots.reduce((s,x)=>s+x.score,0)/b.shots.length:0;return bb-aa;});
+  const sorted=HOUSES.map(h=>({h,shots:S.archery.filter(a=>a.house===h.id)})).sort((a,b)=>{const aa=a.shots.reduce((s,x)=>s+x.score,0);const bb=b.shots.reduce((s,x)=>s+x.score,0);return bb-aa;});
   document.getElementById('arch-board').innerHTML=sorted.map(({h,shots})=>{
     if(!shots.length)return`<div class="lb-row"><div class="dot" style="background:${h.color}"></div><div class="lb-name">${h.emoji} House ${h.name}</div><span class="muted">No entries yet</span></div>`;
-    const avg=shots.reduce((s,a)=>s+a.score,0)/shots.length;
-    return`<div class="lb-row"><div class="dot" style="background:${h.color}"></div><div class="lb-name">${h.emoji} House ${h.name}<div class="lb-sub">${shots.length} shots · avg ${avg.toFixed(2)}</div></div><div class="lb-pts" style="color:${h.color}">${Math.round(avg*10)}pts</div></div>`;
+    const total=shots.reduce((s,a)=>s+a.score,0);
+    return`<div class="lb-row"><div class="dot" style="background:${h.color}"></div><div class="lb-name">${h.emoji} House ${h.name}<div class="lb-sub">${shots.length} shot(s)</div></div><div class="lb-pts" style="color:${h.color}">${total}pts</div></div>`;
   }).join('');
   const all=[...S.archery].sort((a,b)=>b.score-a.score);
   document.getElementById('arch-solo-board').innerHTML=all.length===0?'<div class="muted" style="padding:12px 14px">No entries yet</div>':all.map((a,i)=>{const h=HOUSES.find(x=>x.id===a.house);const lbl=a.score===3?'🎯 Bullseye':a.score===2?'⭕ 1st Ring':'🏹 Hit';return`<div class="lb-row"><div class="lb-rank">${i+1}.</div><div class="dot" style="background:${h?.color||'#888'}"></div><div class="lb-name">${esc(a.name)}</div><div class="lb-pts" style="color:${h?.color||'#888'}">${lbl}</div></div>`;}).join('');
@@ -1274,7 +1276,22 @@ document.addEventListener('click',e=>{if(!e.target.closest('.input-wrap'))docume
 :root{--parchment:#f2e6c0;--parchment-dark:#e0d09a;--ink:#1c0f05;--ink-light:#3d2b0e;--dragon:#c0392b;--wolf:#2471a3;--snake:#1e8449;--lion:#b7770d;--border:#7a5510;--gold:#c8941a;--gold2:#e6b830;}
 *{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:'Crimson Text',Georgia,serif;background:#0d0703;min-height:100vh;color:var(--ink);padding-bottom:30px;overflow-x:hidden;}
-.view{display:none;}.view.active{display:block;}
+.view{display:none;}
+.view.active{display:block;animation:viewUnfurl 0.45s cubic-bezier(0.22,1,0.36,1);}
+@keyframes viewUnfurl{
+  0%{opacity:0;transform:translateY(14px) scale(0.985);}
+  100%{opacity:1;transform:translateY(0) scale(1);}
+}
+/* Parchment cards stagger in gently */
+.view.active .parchment{animation:cardRise 0.5s cubic-bezier(0.22,1,0.36,1) backwards;}
+.view.active .parchment:nth-child(1){animation-delay:0.02s;}
+.view.active .parchment:nth-child(2){animation-delay:0.07s;}
+.view.active .parchment:nth-child(3){animation-delay:0.12s;}
+.view.active .parchment:nth-child(4){animation-delay:0.17s;}
+@keyframes cardRise{
+  0%{opacity:0;transform:translateY(10px);}
+  100%{opacity:1;transform:translateY(0);}
+}
 
 /* ── TORCH BG ── */
 .bg{position:fixed;inset:0;background:radial-gradient(ellipse at 15% 5%,rgba(160,70,5,0.22) 0%,transparent 40%),radial-gradient(ellipse at 85% 5%,rgba(140,55,5,0.18) 0%,transparent 40%),radial-gradient(ellipse at 50% 100%,rgba(60,20,3,0.4) 0%,transparent 50%),#0d0703;animation:bgFlicker 5s ease-in-out infinite alternate;z-index:0;}
@@ -1286,11 +1303,14 @@ body{font-family:'Crimson Text',Georgia,serif;background:#0d0703;min-height:100v
 /* ── SVG FILTERS ── */
 .svg-filters{position:absolute;width:0;height:0;overflow:hidden;}
 
+/* ── AGED VIGNETTE (whole screen) ── */
+.aged-vignette{position:fixed;inset:0;pointer-events:none;z-index:50;background:radial-gradient(ellipse at center,transparent 55%,rgba(40,20,5,0.18) 90%,rgba(25,12,3,0.35) 100%);mix-blend-mode:multiply;}
+
 /* ── NAV ── */
 nav{position:sticky;top:0;z-index:100;background:linear-gradient(180deg,#0d0703,#180a02);border-bottom:2px solid var(--gold);padding:8px 8px 6px;display:flex;gap:4px;flex-wrap:wrap;justify-content:center;box-shadow:0 3px 20px rgba(0,0,0,0.8);}
 .nav-btn{font-family:'Cinzel',serif;font-size:9px;font-weight:700;letter-spacing:0.05em;padding:5px 8px;border:1px solid rgba(200,148,26,0.35);border-radius:2px;cursor:pointer;background:transparent;color:rgba(230,210,150,0.7);text-transform:uppercase;transition:all 0.15s;position:relative;}
 .nav-btn:hover{color:var(--parchment);border-color:var(--gold);}
-.nav-btn.active{background:rgba(200,148,26,0.2);color:var(--gold2);border-color:var(--gold);}
+.nav-btn.active{background:linear-gradient(180deg,rgba(200,148,26,0.28),rgba(200,148,26,0.12));color:var(--gold2);border-color:var(--gold);box-shadow:inset 0 1px 0 rgba(230,184,48,0.3),0 0 12px rgba(200,148,26,0.2);}
 .nav-badge{position:absolute;top:-5px;right:-5px;background:var(--dragon);color:#fff;font-size:8px;font-weight:700;width:15px;height:15px;border-radius:50%;display:flex;align-items:center;justify-content:center;animation:badgePulse 1.5s ease-in-out infinite;}
 @keyframes badgePulse{0%,100%{transform:scale(1);}50%{transform:scale(1.2);}}
 
@@ -1345,7 +1365,8 @@ nav{position:sticky;top:0;z-index:100;background:linear-gradient(180deg,#0d0703,
 
 /* ── SECTION TITLE ── */
 .section-title{font-family:'Cinzel',serif;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--border);text-align:center;padding:10px 14px 8px;position:relative;z-index:2;}
-.section-title::after{content:'';display:block;height:1px;background:linear-gradient(90deg,transparent,var(--border),transparent);margin-top:5px;opacity:0.45;}
+.section-title::after{content:'❧';display:block;font-size:13px;color:var(--gold);margin-top:2px;opacity:0.7;text-align:center;}
+.section-title::before{content:'';display:block;position:absolute;left:14%;right:14%;bottom:6px;height:1px;background:linear-gradient(90deg,transparent,var(--border),transparent);opacity:0.4;}
 
 /* ── HOUSE CARDS ── */
 .houses-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:12px;position:relative;z-index:2;}
@@ -1538,7 +1559,8 @@ input[type=file]{display:none;}
 
 /* ── PAGE TITLES ── */
 .page-title{text-align:center;margin-bottom:14px;}
-.page-title h1{font-family:'Cinzel',serif;font-size:18px;font-weight:900;color:var(--parchment);text-shadow:0 2px 8px rgba(0,0,0,0.8);letter-spacing:0.05em;line-height:1.25;}
+.page-title h1{font-family:'Cinzel Decorative','Cinzel',serif;font-size:19px;font-weight:900;color:var(--parchment);text-shadow:0 2px 8px rgba(0,0,0,0.8),0 0 20px rgba(200,148,26,0.15);letter-spacing:0.05em;line-height:1.3;}
+.page-title h1::after{content:'⚜';display:block;font-size:14px;color:var(--gold);margin-top:2px;opacity:0.8;}
 .page-title p{color:var(--gold2);font-style:italic;font-size:12px;margin-top:4px;}
 
 /* ── ONBOARDING WIZARD ── */
@@ -1600,6 +1622,7 @@ input[type=file]{display:none;}
 </svg>
 
 <div class="bg"></div>
+<div class="aged-vignette"></div>
 <div class="torch torch-l">🔥</div>
 <div class="torch torch-r">🔥</div>
 

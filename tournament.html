@@ -203,13 +203,18 @@ const RIDDLES = [
 ];
 
 // ══ DEVICE MEMORY ══
-// ── Safari fix: if we just performed a reset, hard-clear localStorage again on this fresh load.
-// Safari buffers localStorage writes, so a pre-reload clear can be 'undone' by stale cache —
-// clearing again here, after the reload, guarantees a truly clean slate.
+// ── Post-reset clean-load handler (Safari-proof) ──
+// A reset navigates here with ?fresh=<timestamp>. That unique URL forces Safari to do a
+// genuine fresh load (it can't serve a different URL from bfcache or disk cache). On arrival
+// we hard-clear ALL storage so no stale identity can survive, then strip the param.
+let _forceWizard = false;
 try{
-  if(sessionStorage.getItem('wt_reset_flag')){
-    sessionStorage.removeItem('wt_reset_flag');
+  const _sp = new URLSearchParams(location.search);
+  if(_sp.has('fresh')){
     localStorage.clear();
+    try{ sessionStorage.clear(); }catch(e){}
+    _forceWizard = true;
+    history.replaceState(null, '', location.pathname);
   }
 }catch(e){}
 
@@ -1331,16 +1336,17 @@ async function confirmReset(){showModal('Reset Tournament','This will wipe EVERY
     S.bonus={dragon:0,wolf:0,snake:0,lion:0};S.playerHouses={};S.riddles={};
     S.redemptions={};S.locks={};
     clearPPCache();
-    // 4. Wipe ALL device memory, and flag that a reset happened so the next load re-clears
-    //    (defeats Safari's localStorage write-buffering which caused stale names to reappear)
-    try{
-      localStorage.clear();
-      sessionStorage.setItem('wt_reset_flag','1');
-    }catch(e){}
+    // 4. Wipe ALL device memory
+    try{ localStorage.clear(); sessionStorage.clear(); }catch(e){}
     if(btn){btn.textContent='Wiped! Reloading...';}
     toast('All scrolls and memory wiped clean — reloading');
-    // 5. Force a clean reload so nothing stale can linger (esp. on Safari)
-    setTimeout(()=>{ try{ location.reload(); }catch(e){ location.href=location.href; } }, 700);
+    // 5. Navigate to a UNIQUE cache-busting URL. Unlike location.reload(), a brand-new URL
+    //    cannot be served from Safari's bfcache or disk cache, guaranteeing a truly fresh
+    //    start with cleared storage (this is what finally fixes the stale-name-on-Safari bug).
+    setTimeout(()=>{
+      const url = location.pathname + '?fresh=' + Date.now();
+      try{ location.replace(url); }catch(e){ location.href = url; }
+    }, 500);
   }catch(e){
     toast('Reset error: '+e.message);
     if(btn){btn.disabled=false;btn.textContent='Wipe All Scrolls — Reset Tournament';}
@@ -1380,17 +1386,26 @@ updateDuelBadge();
 handleParams();
 if(currentView==='scoreboard')renderScoreboard();
 
-// If already checked in (returning user), skip the wizard entirely
-if(getMyName()&&getMyHouse()){
+// If already checked in (returning user), skip the wizard entirely.
+// After a reset (_forceWizard), ALWAYS show the wizard regardless of any storage that
+// might have survived — belt-and-suspenders against Safari.
+if(!_forceWizard && getMyName() && getMyHouse()){
   const wz=document.getElementById('wizard');
   if(wz) wz.style.display='none';
 } else {
-  // New user — wizard starts at step 0 (welcome), which is its default visible state
   wizShow(0);
 }
 
 
 document.addEventListener('click',e=>{if(!e.target.closest('.input-wrap'))document.querySelectorAll('.suggestions').forEach(s=>s.style.display='none');});
+
+// ── Safari bfcache guard ──
+// When Safari restores this page from its back-forward cache (e.g. switching apps and back),
+// the JavaScript state is frozen and can be stale. Forcing a reload guarantees fresh data
+// and a correct identity, preventing the "confused / wrong name" behaviour on Safari.
+window.addEventListener('pageshow', function(event){
+  if(event.persisted){ location.reload(); }
+});
 </script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@400;700;900&family=Cinzel:wght@400;700;900&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap');

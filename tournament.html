@@ -57,11 +57,22 @@ window.wizardEnter=function(){
     const sug=document.getElementById('wz-name-sug');
     if(inp){
       inp.addEventListener('input',()=>{
+        const val=inp.value.trim();
+        if(!val){sug.style.display='none';return;}
         const m=fuzzyMatch(inp.value,GUESTS);
-        if(!inp.value||!m.length){sug.style.display='none';return;}
-        sug.innerHTML=m.map(n=>`<div data-n="${esc(n)}">${n}</div>`).join('');
-        sug.style.display='block';
-        sug.querySelectorAll('div').forEach(d=>d.addEventListener('click',()=>{inp.value=d.dataset.n;sug.style.display='none';}));
+        if(m.length){
+          sug.innerHTML=m.map(n=>`<div data-n="${esc(n)}">${n}</div>`).join('');
+          sug.style.display='block';
+          sug.querySelectorAll('div').forEach(d=>d.addEventListener('click',()=>{inp.value=d.dataset.n;sug.style.display='none';}));
+        } else {
+          sug.innerHTML=`<div class="add-name-opt">➕ Don't see thy name? Press here to add it</div>`;
+          sug.style.display='block';
+          sug.querySelector('.add-name-opt').addEventListener('click',async()=>{
+            await addCustomGuest(val);
+            inp.value=val;sug.style.display='none';
+            toast('Welcome, '+val+'! ⚔');
+          });
+        }
       });
       inp.focus();
     }
@@ -154,7 +165,7 @@ function playSound(k){ try{ const s=SFX[k]; if(s){s.currentTime=0;s.volume=0.8;s
 function haptic(p){ try{ if(navigator.vibrate) navigator.vibrate(p); }catch(e){} }
 
 // ══ GUESTS ══
-const GUESTS = ["Will","Rachael","Leigh","Charlie","Lanni","Tim","Anastashia","Tay","Ellen","Di","Steve","Sarah","Jack","Alex McDonald","Masia","Ollie","Liam","Siobhan","Xavier","Tamrin","Ryan","Sienna","Seb","Charlotte","Angus","Bec","Morgan","Maddy Brown","Maddy","Alex Broussard","Pat","Caitlin","Aaron","Kitty","Mim","Eska","Jojo","Rich","Ivy","Tilly","Henry","Paul Smith","Holly","Sophie","Eddy","Mike","Teresa","Emily","Kane","James","Dianna","Josh","Kelly","Noah","Len","Karen","Dianne Anderson","Pete","David","Kate","Tamara","Dave","Francis","Maeve","Zozo","Stephen McDonald","Steven Rewse-Bongers","Lilian","Eleanor","Harriet","Amber","Ducky","Patrice","Sam","Clara","Mitch","Grace","Alfie","Ewan","Paul Harrison","Dianne McDonald","Jayden","Allison","Crawf"];
+let GUESTS = ["Will","Rachael","Leigh","Charlie","Lanni","Tim","Anastashia","Tay","Ellen","Di","Steve","Sarah","Jack","Alex McDonald","Masia","Ollie","Liam","Siobhan","Xavier","Tamrin","Ryan","Sienna","Seb","Charlotte","Angus","Bec","Morgan","Maddy Brown","Maddy","Alex Broussard","Pat","Caitlin","Aaron","Kitty","Mim","Eska","Jojo","Rich","Ivy","Tilly","Henry","Paul Smith","Holly","Sophie","Eddy","Mike","Teresa","Emily","Kane","James","Dianna","Josh","Kelly","Noah","Len","Karen","Dianne Anderson","Pete","David","Kate","Tamara","Dave","Francis","Maeve","Zozo","Stephen McDonald","Steven Rewse-Bongers","Lilian","Eleanor","Harriet","Amber","Ducky","Patrice","Sam","Clara","Mitch","Grace","Alfie","Ewan","Paul Harrison","Dianne McDonald","Jayden","Allison","Crawf","Moe","Lily","Luke"];
 
 const HOUSES = [
   {id:'dragon',name:'Dragon',emoji:'🐉',color:'#c0392b',img:'house_dragon_transparent.png'},
@@ -192,23 +203,29 @@ const RIDDLES = [
 ];
 
 // ══ DEVICE MEMORY ══
+// ── Safari fix: if we just performed a reset, hard-clear localStorage again on this fresh load.
+// Safari buffers localStorage writes, so a pre-reload clear can be 'undone' by stale cache —
+// clearing again here, after the reload, guarantees a truly clean slate.
+try{
+  if(sessionStorage.getItem('wt_reset_flag')){
+    sessionStorage.removeItem('wt_reset_flag');
+    localStorage.clear();
+  }
+}catch(e){}
+
 const DID = (() => { let d=localStorage.getItem('wt_did'); if(!d){d='d_'+Math.random().toString(36).slice(2);localStorage.setItem('wt_did',d);} return d; })();
 function rememberMe(name,house){
   if(!name)return;
-  // Track frequency per name
-  const freq=JSON.parse(localStorage.getItem('wt_freq')||'{}');
-  freq[name]=(freq[name]||0)+1;
-  localStorage.setItem('wt_freq',JSON.stringify(freq));
-  // Most frequent name wins
-  const topName=Object.entries(freq).sort((a,b)=>b[1]-a[1])[0][0];
-  localStorage.setItem('wt_name',topName);
-  localStorage.setItem('wt_house',house);
+  // The name the person is CURRENTLY using is authoritative — set it directly.
+  // (No more 'most frequent wins', which caused shared-device mix-ups.)
+  localStorage.setItem('wt_name',name);
+  if(house) localStorage.setItem('wt_house',house);
 }
 function getMyName(){ return localStorage.getItem('wt_name')||''; }
 function getMyHouse(){ return localStorage.getItem('wt_house')||''; }
 
 // ══ STATE ══
-let S = { teamRankings:{}, eggs:{dragon:0,wolf:0,snake:0,lion:0}, bonus:{dragon:0,wolf:0,snake:0,lion:0}, playerHouses:{}, archery:[], nail:[], caber:[], duels:[], riddles:{}, art:[], bestDressed:[], grants:[], redemptions:{}, locks:{} };
+let S = { teamRankings:{}, eggs:{dragon:0,wolf:0,snake:0,lion:0}, bonus:{dragon:0,wolf:0,snake:0,lion:0}, playerHouses:{}, archery:[], nail:[], caber:[], duels:[], riddles:{}, art:[], bestDressed:[], grants:[], redemptions:{}, locks:{}, customGuests:[] };
 let adminUnlocked = false;
 let currentView = 'scoreboard';
 let submitting = false;
@@ -218,6 +235,11 @@ async function fsSet(path,data){ await setDoc(doc(db,...path.split('/')),data,{m
 async function fsAdd(col,data){ return await addDoc(collection(db,col),{...data,ts:serverTimestamp()}); }
 async function fsDel(col,id){ await deleteDoc(doc(db,col,id)); }
 async function fsGetAll(col){ const s=await getDocs(collection(db,col)); return s.docs.map(d=>({id:d.id,...d.data()})); }
+// Count a person's live entries in a collection (fresh server read) for limit enforcement
+async function liveEntryCount(col,name){
+  try{ const s=await getDocs(collection(db,col)); return s.docs.filter(d=>normName(d.data().name)===normName(name)).length; }
+  catch(e){ return 0; }
+}
 
 async function cleanupBadDuels(){
   // Remove any duels with missing/blank challenger or opponent names (corrupt test data)
@@ -243,6 +265,8 @@ async function loadAll(){
       fsGetAll('archery'),fsGetAll('nail'),fsGetAll('caber'),fsGetAll('duels'),fsGetAll('art'),fsGetAll('bestDressed'),fsGetAll('grants'),
       getDoc(doc(db,'state','redemptions')),getDoc(doc(db,'state','locks')),
     ]);
+    // Merge any custom-added guests into the list
+    try{ const cg=await fsGetAll('customGuests'); cg.forEach(g=>{ if(g.name&&!GUESTS.some(x=>normName(x)===normName(g.name)))GUESTS.push(g.name); }); }catch(e){}
     S.teamRankings=r.exists()?r.data():{};
     S.eggs=e.exists()?e.data():{dragon:0,wolf:0,snake:0,lion:0};
     S.bonus=b.exists()?b.data():{dragon:0,wolf:0,snake:0,lion:0};
@@ -266,6 +290,7 @@ function startListeners(){
   onSnapshot(collection(db,'grants'),s=>{ S.grants=s.docs.map(d=>({id:d.id,...d.data()})); if(currentView==='scoreboard')renderScoreboard(); if(currentView==='personal')lookupPersonal(); if(adminUnlocked&&currentView==='maester')renderMaester(); });
   onSnapshot(doc(db,'state','redemptions'),s=>{ if(s.exists())S.redemptions=s.data(); if(currentView==='scoreboard')renderScoreboard(); });
   onSnapshot(doc(db,'state','locks'),s=>{ if(s.exists())S.locks=s.data(); if(currentView==='scoreboard')renderScoreboard(); if(adminUnlocked&&currentView==='maester')renderMaester(); });
+  onSnapshot(collection(db,'customGuests'),s=>{ s.docs.forEach(d=>{ const nm=d.data().name; if(nm&&!GUESTS.some(x=>normName(x)===normName(nm)))GUESTS.push(nm); }); });
   onSnapshot(doc(db,'state','teamRankings'),s=>{ if(s.exists())S.teamRankings=s.data(); if(currentView==='scoreboard')renderScoreboard(); if(adminUnlocked&&currentView==='maester')renderMaester(); });
   onSnapshot(doc(db,'state','eggs'),s=>{ if(s.exists())S.eggs=s.data(); if(currentView==='scoreboard')renderScoreboard(); if(adminUnlocked&&currentView==='maester')renderMaester(); });
   onSnapshot(doc(db,'state','bonus'),s=>{ if(s.exists())S.bonus=s.data(); if(currentView==='scoreboard')renderScoreboard(); });
@@ -367,6 +392,8 @@ function houseSumPersonal(){
   });
   (S.grants||[]).forEach(g=>{if(!all[normName(g.name)])all[normName(g.name)]={name:g.name,house:g.house};});
   Object.values(S.riddles).filter(r=>r.solved&&r.winnerHouse).forEach(r=>{if(!all[normName(r.winnerName)])all[normName(r.winnerName)]={name:r.winnerName,house:r.winnerHouse};});
+  // Include everyone who has checked in (even if they've not competed yet) — they hold their starting 5
+  Object.entries(S.playerHouses||{}).forEach(([nm,hid])=>{if(!all[nm])all[nm]={name:nm,house:hid};});
   Object.values(all).forEach(p=>{if(sums[p.house]!==undefined)sums[p.house]+=personalPoints(p.name).pts;});
   return sums;
 }
@@ -391,26 +418,54 @@ function fuzzyMatch(input,list){
   const ni=normName(input); if(!ni)return[];
   return list.map(n=>{const nn=normName(n);if(nn===ni)return{n,s:100};if(nn.startsWith(ni)||ni.startsWith(nn))return{n,s:80};let ov=0;for(let i=0;i<Math.min(ni.length,nn.length);i++)if(ni[i]===nn[i])ov++;return{n,s:ov*10-Math.abs(ni.length-nn.length)*2};}).filter(x=>x.s>15).sort((a,b)=>b.s-a.s).slice(0,5).map(x=>x.n);
 }
+// Merge a custom-added name into the guest list (local + Firestore so all devices see it)
+async function addCustomGuest(name){
+  const clean=String(name||'').trim();
+  if(!clean)return;
+  if(GUESTS.some(g=>normName(g)===normName(clean))) return; // already known
+  GUESTS.push(clean);
+  try{ await fsAdd('customGuests',{name:clean}); }catch(e){}
+}
+window.addCustomGuest=addCustomGuest;
+
 function setupNameInput(inputId,sugId,onPick){
   const inp=document.getElementById(inputId);const sug=document.getElementById(sugId);if(!inp||!sug)return;
   const ni=inp.cloneNode(true);inp.parentNode.replaceChild(ni,inp);
   ni.addEventListener('input',()=>{
+    const val=ni.value.trim();
+    if(!val){sug.style.display='none';return;}
     const m=fuzzyMatch(ni.value,GUESTS);
-    if(!ni.value||!m.length){sug.style.display='none';return;}
-    sug.innerHTML=m.map(n=>`<div data-n="${esc(n)}">${n}</div>`).join('');
-    sug.style.display='block';
-    sug.querySelectorAll('div').forEach(d=>d.addEventListener('click',()=>{ni.value=d.dataset.n;sug.style.display='none';if(onPick)onPick(d.dataset.n);}));
+    if(m.length){
+      sug.innerHTML=m.map(n=>`<div data-n="${esc(n)}">${n}</div>`).join('');
+      sug.style.display='block';
+      sug.querySelectorAll('div').forEach(d=>d.addEventListener('click',()=>{ni.value=d.dataset.n;sug.style.display='none';if(onPick)onPick(d.dataset.n);}));
+    } else {
+      // No match — let them add their own name
+      sug.innerHTML=`<div class="add-name-opt">➕ Don't see thy name? Press here to add it</div>`;
+      sug.style.display='block';
+      sug.querySelector('.add-name-opt').addEventListener('click',async()=>{
+        await addCustomGuest(val);
+        ni.value=val;sug.style.display='none';
+        toast('Welcome, '+val+'! Thy name is added ⚔');
+        if(onPick)onPick(val);
+      });
+    }
   });
 }
 
 // ══ DUEL BADGE + ALERT ══
 function updateDuelBadge(){
   const myName=getMyName();
-  const active=S.duels.filter(d=>d.status==='pending'||d.status==='awaiting');
-  const mine=myName?S.duels.filter(d=>d.status==='pending'&&normName(d.p2)===normName(myName)):[];
   const badge=document.getElementById('duel-badge');
   if(!badge)return;
-  const count=myName&&mine.length?mine.length:active.length;
+  // Only count duels relevant to ME: pending challenges where I'm the opponent,
+  // plus accepted duels I'm in that still need a winner recorded.
+  let count=0;
+  if(myName){
+    const pendingForMe=S.duels.filter(d=>d.status==='pending'&&normName(d.p2)===normName(myName));
+    const awaitingMine=S.duels.filter(d=>d.status==='awaiting'&&(normName(d.p1)===normName(myName)||normName(d.p2)===normName(myName)));
+    count=pendingForMe.length+awaitingMine.length;
+  }
   badge.style.display=count>0?'flex':'none';
   badge.textContent=count;
 }
@@ -561,15 +616,21 @@ async function submitArchery(){
   if(!name){toast('Declare thy name!');submitting=false;btn.disabled=false;return;}
   if(!archSelHouse){toast('Name thy house!');submitting=false;btn.disabled=false;return;}
   if(!archSelScore){toast('Choose thy shot result');submitting=false;btn.disabled=false;return;}
-  if(S.archery.filter(a=>normName(a.name)===normName(name)).length>=2){toast('Thou hast already loosed thy 2 arrows!');submitting=false;btn.disabled=false;return;}
-  await fsSet('state/playerHouses',{[normName(name)]:archSelHouse});
-  await fsAdd('archery',{name,house:archSelHouse,score:archSelScore});
-  rememberMe(name,archSelHouse);
-  playSound('bow'); haptic(30);
-  if(archSelScore===3)fireConfetti();
-  const lbl=archSelScore===3?'BULLSEYE! 🎯':archSelScore===2?'First ring! ⭕':'Hit! 🏹';
-  showSuccess('arch',`${name} — ${lbl} — ${archSelScore} honour point(s) for House ${capFirst(archSelHouse)}!`);
-  archSelScore=null;archSelHouse=null;submitting=false;
+  try{
+    if(await liveEntryCount('archery',name)>=2){toast('Thou hast already loosed thy 2 arrows!');submitting=false;btn.disabled=false;return;}
+    await fsSet('state/playerHouses',{[normName(name)]:archSelHouse});
+    await fsAdd('archery',{name,house:archSelHouse,score:archSelScore});
+    rememberMe(name,archSelHouse);
+    playSound('bow'); haptic(30);
+    if(archSelScore===3)fireConfetti();
+    const lbl=archSelScore===3?'BULLSEYE! 🎯':archSelScore===2?'First ring! ⭕':'Hit! 🏹';
+    showSuccess('arch',`${name} — ${lbl} — ${archSelScore} honour point(s) for House ${capFirst(archSelHouse)}!`);
+    archSelScore=null;archSelHouse=null;
+  }catch(e){
+    toast('Could not record — check thy connection and try again');
+    btn.disabled=false;
+  }
+  submitting=false;
 }
 
 function resetArch(){document.getElementById('arch-form').style.display='';document.getElementById('arch-success').style.display='none';document.getElementById('arch-submit-btn').disabled=false;archSelScore=null;archSelHouse=null;document.querySelectorAll('.arch-house-btn,.arch-shot-btn').forEach(b=>b.classList.remove('sel'));autoFillName('arch-name',h=>setArchHouse(h));}
@@ -597,15 +658,21 @@ async function submitNail(){
   if(!name){toast('Declare thy name!');submitting=false;btn.disabled=false;return;}
   if(!nailSelHouse){toast('Name thy house!');submitting=false;btn.disabled=false;return;}
   if(isNaN(swings)||swings<1){toast('Enter thy swing count');submitting=false;btn.disabled=false;return;}
-  if(S.nail.filter(n=>normName(n.name)===normName(name)).length>=2){toast('Thou hast already swung thy hammer twice!');submitting=false;btn.disabled=false;return;}
-  await fsSet('state/playerHouses',{[normName(name)]:nailSelHouse});
-  await fsAdd('nail',{name,house:nailSelHouse,swings});
-  rememberMe(name,nailSelHouse);
-  playSound('hammer'); haptic([50,10,20]);
-  if(swings<5)fireConfetti();
-  const pts=Math.max(0,10-swings);
-  showSuccess('nail',`${name} — ${swings} swings — ${pts} honour point(s) for House ${capFirst(nailSelHouse)}!${pts===0?' The nail hath resisted thee... 😬':''}`);
-  nailSelHouse=null;submitting=false;
+  try{
+    if(await liveEntryCount('nail',name)>=2){toast('Thou hast already swung thy hammer twice!');submitting=false;btn.disabled=false;return;}
+    await fsSet('state/playerHouses',{[normName(name)]:nailSelHouse});
+    await fsAdd('nail',{name,house:nailSelHouse,swings});
+    rememberMe(name,nailSelHouse);
+    playSound('hammer'); haptic([50,10,20]);
+    if(swings<5)fireConfetti();
+    const pts=Math.max(0,10-swings);
+    showSuccess('nail',`${name} — ${swings} swings — ${pts} honour point(s) for House ${capFirst(nailSelHouse)}!${pts===0?' The nail hath resisted thee... 😬':''}`);
+    nailSelHouse=null;
+  }catch(e){
+    toast('Could not record — check thy connection and try again');
+    btn.disabled=false;
+  }
+  submitting=false;
 }
 
 function resetNail(){document.getElementById('nail-form').style.display='';document.getElementById('nail-success').style.display='none';document.getElementById('nail-name').value='';document.getElementById('nail-swings').value='';document.getElementById('nail-submit-btn').disabled=false;nailSelHouse=null;document.querySelectorAll('.nail-house-btn').forEach(b=>b.classList.remove('sel'));autoFillName('nail-name',h=>setNailHouse(h));}
@@ -627,15 +694,21 @@ async function submitCaber(){
   if(!name){toast('Declare thy name!');submitting=false;btn.disabled=false;return;}
   if(!caberSelHouse){toast('Name thy house!');submitting=false;btn.disabled=false;return;}
   if(caberSelScore===null){toast('Choose how far thy caber flew');submitting=false;btn.disabled=false;return;}
-  if(S.caber.filter(cb=>normName(cb.name)===normName(name)).length>=2){toast('Thou hast already tossed thy 2 cabers!');submitting=false;btn.disabled=false;return;}
-  await fsSet('state/playerHouses',{[normName(name)]:caberSelHouse});
-  await fsAdd('caber',{name,house:caberSelHouse,score:caberSelScore});
-  rememberMe(name,caberSelHouse);
-  playSound('hammer'); haptic([40,15,40]);
-  if(caberSelScore===3)fireConfetti();
-  const lbl=caberSelScore===3?'Past the third line! 🪵':caberSelScore===2?'Past the second line! 🪵':caberSelScore===1?'Past the first line! 🪵':'It barely moved... 😅';
-  showSuccess('caber',`${name} — ${lbl} — ${caberSelScore} honour for thee & House ${capFirst(caberSelHouse)}!`);
-  caberSelScore=null;caberSelHouse=null;submitting=false;
+  try{
+    if(await liveEntryCount('caber',name)>=2){toast('Thou hast already tossed thy 2 cabers!');submitting=false;btn.disabled=false;return;}
+    await fsSet('state/playerHouses',{[normName(name)]:caberSelHouse});
+    await fsAdd('caber',{name,house:caberSelHouse,score:caberSelScore});
+    rememberMe(name,caberSelHouse);
+    playSound('hammer'); haptic([40,15,40]);
+    if(caberSelScore===3)fireConfetti();
+    const lbl=caberSelScore===3?'Past the third line! 🪵':caberSelScore===2?'Past the second line! 🪵':caberSelScore===1?'Past the first line! 🪵':'It barely moved... 😅';
+    showSuccess('caber',`${name} — ${lbl} — ${caberSelScore} honour for thee & House ${capFirst(caberSelHouse)}!`);
+    caberSelScore=null;caberSelHouse=null;
+  }catch(e){
+    toast('Could not record — check thy connection and try again');
+    btn.disabled=false;
+  }
+  submitting=false;
 }
 
 function resetCaber(){document.getElementById('caber-form').style.display='';document.getElementById('caber-success').style.display='none';document.getElementById('caber-submit-btn').disabled=false;caberSelScore=null;caberSelHouse=null;document.querySelectorAll('.caber-house-btn,.caber-line-btn').forEach(b=>b.classList.remove('sel'));autoFillName('caber-name',h=>setCaberHouse(h));}
@@ -660,21 +733,29 @@ async function issueDuel(){
   const btn=document.getElementById('duel-issue-btn');btn.disabled=true;
   const p1=document.getElementById('duel-p1').value.trim();
   const p2=document.getElementById('duel-p2').value.trim();
-  const wager=parseInt(document.getElementById('duel-wager').value);
+  const wagerRaw=document.getElementById('duel-wager').value;
+  const wager=parseInt(wagerRaw,10);
   if(!p1||!p2){toast('Name both warriors!');submitting=false;btn.disabled=false;return;}
   if(normName(p1)===normName(p2)){toast('One cannot duel oneself!');submitting=false;btn.disabled=false;return;}
-  if(isNaN(wager)||wager<1){toast('Set a worthy wager');submitting=false;btn.disabled=false;return;}
+  if(isNaN(wager)||wager<1||wager!==Math.floor(Number(wagerRaw))){toast('Set a whole-number wager of 1 or more');submitting=false;btn.disabled=false;return;}
   const p1pts=personalPoints(p1).pts;
   if(wager>p1pts){toast(`Thou hast not enough honour! (${p1pts} pts available)`);submitting=false;btn.disabled=false;return;}
+  // Opponent should be a real, known warrior (on the guest list or already checked in)
+  const p2known = GUESTS.some(g=>normName(g)===normName(p2)) || (S.playerHouses||{})[normName(p2)];
+  if(!p2known){toast(`No warrior named "${p2}" is known — check the spelling`);submitting=false;btn.disabled=false;return;}
   // Opponent must be able to cover the wager too
   const p2pts=personalPoints(p2).pts;
   if(wager>p2pts){toast(`${p2}'s honour is too low for that wager (they have ${p2pts} pts)`);submitting=false;btn.disabled=false;return;}
   const p1house=S.playerHouses[normName(p1)]||null;
   const p2house=S.playerHouses[normName(p2)]||null;
-  await fsAdd('duels',{p1,p2,p1house,p2house,wager,status:'pending',winner:null});
-  playSound('sword'); haptic([20,10,20,10,15]);
-  document.getElementById('duel-p1').value=''; document.getElementById('duel-p2').value=''; document.getElementById('duel-wager').value='';
-  toast('Challenge issued! Await thy opponent ⚔');
+  try{
+    await fsAdd('duels',{p1,p2,p1house,p2house,wager,status:'pending',winner:null});
+    playSound('sword'); haptic([20,10,20,10,15]);
+    document.getElementById('duel-p1').value=''; document.getElementById('duel-p2').value=''; document.getElementById('duel-wager').value='';
+    toast('Challenge issued! Await thy opponent ⚔');
+  }catch(e){
+    toast('Could not issue challenge — check thy connection');
+  }
   submitting=false;btn.disabled=false;
 }
 
@@ -698,26 +779,35 @@ async function declineDuel(id){
   toast('Duel declined — cowardice noted 🐔');
 }
 
-async function claimDuel(id,winner){
+async function claimDuel(id,side){
   const duel=S.duels.find(d=>d.id===id);
-  if(duel&&duel.status==='done'){toast('This duel hath already been decided!');return;}
-  await setDoc(doc(db,'duels',id),{status:'done',winner},{merge:true});
+  if(!duel){toast('Duel not found');return;}
+  if(duel.status==='done'){toast('This duel hath already been decided!');return;}
+  // Resolve which player won from the side token (avoids putting names in onclick)
+  const winner = side==='p1' ? duel.p1 : (side==='p2' ? duel.p2 : side);
+  const loser = side==='p1' ? duel.p2 : duel.p1;
+  const loserNorm = normName(loser);
+  // Cap the loss at what the loser ACTUALLY holds right now (prevents negative honour
+  // from simultaneous/stale duels). The duel records the real amount transferred.
+  clearPPCache();
+  const loserHas = personalPoints(loser).pts;
+  const actualWager = Math.max(0, Math.min(duel.wager, loserHas));
+  await setDoc(doc(db,'duels',id),{status:'done',winner,wager:actualWager,intendedWager:duel.wager},{merge:true});
+  if(duel){duel.status='done';duel.winner=winner;duel.wager=actualWager;}
   playSound('sword'); haptic([30,10,30,10,50]);
   fireConfetti();
-  toast(winner+' claims victory! ⚔');
-  // Update local duel state so points recompute immediately
-  if(duel){duel.status='done';duel.winner=winner;}
-  // Peasant's Redemption — if the loser has hit 0 (or below) and never been redeemed, grant once
-  if(duel){
-    const loser = normName(winner)===normName(duel.p1) ? duel.p2 : duel.p1;
-    const loserNorm = normName(loser);
+  if(actualWager<duel.intendedWager && actualWager<personalPoints(loser).pts+actualWager){
+    toast(winner+' wins! (only '+actualWager+' honour could be claimed) ⚔');
+  } else {
+    toast(winner+' claims victory! ⚔');
+  }
+  // Peasant's Redemption — if the loser is now at 0 and never redeemed, grant once
+  clearPPCache();
+  if(personalPoints(loser).pts<=0 && !((S.redemptions||{})[loserNorm])){
+    await fsSet('state/redemptions',{[loserNorm]:true});
+    S.redemptions=S.redemptions||{}; S.redemptions[loserNorm]=true;
     clearPPCache();
-    if(personalPoints(loser).pts<=0 && !((S.redemptions||{})[loserNorm])){
-      await fsSet('state/redemptions',{[loserNorm]:true});
-      S.redemptions=S.redemptions||{}; S.redemptions[loserNorm]=true;
-      clearPPCache();
-      setTimeout(()=>toast(loser+' hath been granted a Peasant\'s Redemption — +3 honour to rise again! 🕊️'),1600);
-    }
+    setTimeout(()=>toast(loser+' hath been granted a Peasant\'s Redemption — +3 honour to rise again! 🕊️'),1600);
   }
 }
 
@@ -738,7 +828,7 @@ function renderDuels(){
 
     // CONFIRMED — both can claim the victor
     if(d.status==='awaiting'){
-      return`<div class="duel-item">${head}<div class="muted" style="font-size:12px;margin:4px 0 8px;text-align:center">Wager: ${d.wager} honour · Duel accepted — who won?</div><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn-sm" style="flex:1" onclick="claimDuel('${d.id}','${esc(d.p1)}')">${esc(d.p1)} won ⚔</button><button class="btn-sm" style="flex:1" onclick="claimDuel('${d.id}','${esc(d.p2)}')">${esc(d.p2)} won ⚔</button></div></div>`;
+      return`<div class="duel-item">${head}<div class="muted" style="font-size:12px;margin:4px 0 8px;text-align:center">Wager: ${d.wager} honour · Duel accepted — who won?</div><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn-sm" style="flex:1" onclick="claimDuel('${d.id}','p1')">${esc(d.p1)} won ⚔</button><button class="btn-sm" style="flex:1" onclick="claimDuel('${d.id}','p2')">${esc(d.p2)} won ⚔</button></div></div>`;
     }
 
     // PENDING + I am the opponent → one-tap accept/decline
@@ -775,7 +865,29 @@ async function lookupPersonal(){
   else{pb.textContent='House unknown';pb.style.background='rgba(139,105,20,0.2)';pb.style.color='var(--ink-light)';}
   document.getElementById('personal-breakdown').innerHTML=res.breakdown.map(b=>`<div class="lb-row"><div class="lb-name">${b.label}<div class="lb-sub">${b.detail}</div></div><div class="lb-pts">${b.pts>=0?'+':''}${b.pts}</div></div>`).join('');
   document.getElementById('personal-duels').innerHTML=res.duels.length===0?'<div class="muted" style="padding:10px 14px">No duels fought yet</div>':res.duels.map(d=>{const opp=normName(d.p1)===normName(name)?d.p2:d.p1;const won=d.status==='done'&&normName(d.winner)===normName(name);const pend=d.status!=='done';return`<div class="lb-row"><div class="lb-name">${pend?'⏳':'⚔'} vs ${esc(opp)}<div class="lb-sub">Wager: ${d.wager}pts · ${pend?'Pending':won?'Victory! ✅':'Defeated ❌'}</div></div><div class="lb-pts" style="color:${won?'#1e8449':pend?'#b7770d':'#c0392b'}">${won?'+'+d.wager:pend?'?':'-'+d.wager}</div></div>`;}).join('');
+  // If this looked-up name isn't the one saved on this device, offer to make it the identity
+  const idBox=document.getElementById('personal-identity-box');
+  if(idBox){
+    if(normName(name)!==normName(getMyName())){
+      idBox.style.display='block';
+      idBox.innerHTML=`<div style="text-align:center;padding:10px 14px"><div style="font-size:13px;font-style:italic;color:var(--ink-light);margin-bottom:8px">This device is currently set to <strong>${esc(getMyName()||'nobody')}</strong>.</div><button class="btn-sm" onclick="setAsMe()">Make this phone "${esc(name)}" ⚔</button></div>`;
+    } else {
+      idBox.style.display='none';
+    }
+  }
 }
+
+window.setAsMe=async function(){
+  const name=document.getElementById('personal-name').value.trim();
+  if(!name){toast('Look up a name first');return;}
+  const h=S.playerHouses[normName(name)]||getMyHouse()||'';
+  rememberMe(name,h);
+  clearPPCache();
+  toast(`This phone is now set to ${name}! ⚔`);
+  renderWelcome();
+  updateDuelBadge();
+  lookupPersonal();
+};
 
 // ══ HOUSE FIX (My Honour escape hatch) ══
 function openHouseFix(){
@@ -785,7 +897,7 @@ function openHouseFix(){
 async function fixHouse(h){
   const name=document.getElementById('personal-name').value.trim()||getMyName();
   if(!name){toast('Look up thy name first');return;}
-  // Update device memory
+  // Changing details here makes THIS name the device's identity for everything
   rememberMe(name,h);
   // Update Firestore player house mapping
   await fsSet('state/playerHouses',{[normName(name)]:h});
@@ -937,11 +1049,18 @@ function renderRiddles(){
 
 function riddleNameInput(rid,val){
   const sug=document.getElementById('riddle-sug-'+rid);
+  const v=String(val||'').trim();
+  if(!v){sug.style.display='none';return;}
   const m=fuzzyMatch(val,GUESTS);
-  if(!val||!m.length){sug.style.display='none';return;}
-  sug.innerHTML=m.map(n=>`<div data-n="${esc(n)}">${n}</div>`).join('');
-  sug.style.display='block';
-  sug.querySelectorAll('div').forEach(d=>d.addEventListener('click',()=>{document.getElementById('riddle-name-'+rid).value=d.dataset.n;sug.style.display='none';const h=S.playerHouses[normName(d.dataset.n)];if(h)document.getElementById('riddle-house-'+rid).value=h;}));
+  if(m.length){
+    sug.innerHTML=m.map(n=>`<div data-n="${esc(n)}">${n}</div>`).join('');
+    sug.style.display='block';
+    sug.querySelectorAll('div').forEach(d=>d.addEventListener('click',()=>{document.getElementById('riddle-name-'+rid).value=d.dataset.n;sug.style.display='none';const h=S.playerHouses[normName(d.dataset.n)];if(h)document.getElementById('riddle-house-'+rid).value=h;}));
+  } else {
+    sug.innerHTML=`<div class="add-name-opt">➕ Don't see thy name? Press here to add it</div>`;
+    sug.style.display='block';
+    sug.querySelector('.add-name-opt').addEventListener('click',async()=>{ await addCustomGuest(v); document.getElementById('riddle-name-'+rid).value=v; sug.style.display='none'; toast('Welcome, '+v+'! ⚔'); });
+  }
 }
 
 async function submitRiddleAnswer(rid){
@@ -1019,14 +1138,18 @@ async function submitBestDressedVote(){
   const btn=document.getElementById('bd-submit-btn'); btn.disabled=true;
   const name=document.getElementById('bd-name').value.trim();
   if(!name){toast('Name a warrior!');submitting=false;btn.disabled=false;return;}
-  // One vote per device
   const did=getDeviceId();
-  const existing=S.bestDressed?S.bestDressed.find(v=>v.deviceId===did):null;
-  if(existing){toast('Thou hast already cast thy vote!');submitting=false;btn.disabled=false;return;}
-  await fsAdd('bestDressed',{name,deviceId:did});
-  rememberMe(getMyName()||name, getMyHouse());
-  document.getElementById('bd-form').style.display='none';
-  document.getElementById('bd-success').style.display='block';
+  try{
+    // Re-check against a fresh server read so a double-tap can't double-vote
+    const live=await fsGetAll('bestDressed');
+    if(live.find(v=>v.deviceId===did)){toast('Thou hast already cast thy vote!');submitting=false;btn.disabled=false;document.getElementById('bd-form').style.display='none';document.getElementById('bd-success').style.display='block';return;}
+    await fsAdd('bestDressed',{name,deviceId:did});
+    document.getElementById('bd-form').style.display='none';
+    document.getElementById('bd-success').style.display='block';
+  }catch(e){
+    toast('Could not record thy vote — check thy connection');
+    btn.disabled=false;
+  }
   submitting=false;
 }
 
@@ -1117,9 +1240,10 @@ function grantNameInput(val){
 
 async function grantPoints(){
   const name=document.getElementById('grant-name').value.trim();
-  const pts=parseInt(document.getElementById('grant-pts').value);
+  const pts=parseInt(document.getElementById('grant-pts').value,10);
   if(!name){toast('Name the warrior to be granted honour');return;}
   if(isNaN(pts)||pts===0){toast('Enter a points amount');return;}
+  if(Math.abs(pts)>100){toast('That is too many points at once (max 100)');return;}
   const house=S.playerHouses[normName(name)]||null;
   await fsAdd('grants',{name,house,pts});
   clearPPCache();
@@ -1201,25 +1325,22 @@ async function confirmReset(){showModal('Reset Tournament','This will wipe EVERY
     await setDoc(doc(db,'state','riddles'),{});
     await setDoc(doc(db,'state','redemptions'),{});
     await setDoc(doc(db,'state','locks'),{});
-    // 3. Clear local in-memory state (resets personal points — they derive from this)
+    // 3. Clear local in-memory state
     S.archery=[];S.nail=[];S.caber=[];S.duels=[];S.art=[];S.bestDressed=[];S.grants=[];
     S.teamRankings={};S.eggs={dragon:0,wolf:0,snake:0,lion:0};
     S.bonus={dragon:0,wolf:0,snake:0,lion:0};S.playerHouses={};S.riddles={};
     S.redemptions={};S.locks={};
     clearPPCache();
-    // 4. Wipe ALL device memory / localStorage (name, house, frequency, device id, dismissed alerts)
+    // 4. Wipe ALL device memory, and flag that a reset happened so the next load re-clears
+    //    (defeats Safari's localStorage write-buffering which caused stale names to reappear)
     try{
-      localStorage.removeItem('wt_name');
-      localStorage.removeItem('wt_house');
-      localStorage.removeItem('wt_freq');
-      localStorage.removeItem('wt_alerted_duels');
-      localStorage.removeItem('device_id');
-      localStorage.removeItem('wt_did');
+      localStorage.clear();
+      sessionStorage.setItem('wt_reset_flag','1');
     }catch(e){}
-    toast('All scrolls and memory wiped clean');
-    // 5. Re-render everything fresh
-    renderMaester();renderScoreboard();renderWelcome();updateDuelBadge();
-    if(btn){btn.disabled=false;btn.textContent='Wipe All Scrolls — Reset Tournament';}
+    if(btn){btn.textContent='Wiped! Reloading...';}
+    toast('All scrolls and memory wiped clean — reloading');
+    // 5. Force a clean reload so nothing stale can linger (esp. on Safari)
+    setTimeout(()=>{ try{ location.reload(); }catch(e){ location.href=location.href; } }, 700);
   }catch(e){
     toast('Reset error: '+e.message);
     if(btn){btn.disabled=false;btn.textContent='Wipe All Scrolls — Reset Tournament';}
@@ -1395,6 +1516,9 @@ nav{position:sticky;top:0;z-index:100;background:linear-gradient(180deg,#0d0703,
 .suggestions{position:absolute;left:0;right:0;background:var(--parchment);border:1px solid var(--border);border-top:none;z-index:300;max-height:160px;overflow-y:auto;}
 .suggestions div{padding:8px 14px;font-size:15px;cursor:pointer;border-bottom:1px solid rgba(122,85,16,0.15);}
 .suggestions div:hover{background:var(--parchment-dark);}
+.add-name-opt{padding:10px 14px;font-size:14px;cursor:pointer;color:var(--ink-light);font-style:italic;background:rgba(200,148,26,0.1);border-top:1px solid rgba(122,85,16,0.2);}
+.add-name-opt:hover{background:rgba(200,148,26,0.2);}
+.add-name-opt strong{color:var(--ink);font-style:normal;}
 
 /* ── HOUSE PICKERS ── */
 .house-picker{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:0 14px;position:relative;z-index:2;}
@@ -1749,6 +1873,7 @@ input[type=file]{display:none;}
           <div class="personal-pts" id="personal-pts-val">0</div>
           <div class="personal-house-badge" id="personal-house-badge"></div>
           <div style="margin-top:10px"><span onclick="openHouseFix()" style="font-size:12px;font-style:italic;color:var(--ink-light);text-decoration:underline;cursor:pointer">Wrong house? Tap to change</span></div>
+          <div id="personal-identity-box" style="display:none;margin-top:10px;padding:8px;background:rgba(122,85,16,0.06);border-radius:4px"></div>
           <div id="house-fix-box" style="display:none;margin-top:10px;padding:10px;background:rgba(122,85,16,0.08);border-radius:4px">
             <div style="font-family:'Cinzel',serif;font-size:10px;color:var(--ink-light);margin-bottom:8px;letter-spacing:0.06em">CHOOSE THY TRUE HOUSE</div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
@@ -1991,8 +2116,8 @@ input[type=file]{display:none;}
     <!-- STEP 1: Name -->
     <div class="wz-step" id="wz-1" style="display:none">
       <div class="wz-icon">📜</div>
-      <div class="wz-title">Declare Thy Name</div>
-      <div class="wz-sub">Find thyself upon the royal scroll</div>
+      <div class="wz-title">Find Thy Name</div>
+      <div class="wz-sub">Search the royal scroll for thy name</div>
       <div class="input-wrap" style="margin-top:16px">
         <input class="wz-input" type="text" id="wz-name" placeholder="Begin typing thy name..." autocomplete="off"/>
         <div class="suggestions" id="wz-name-sug" style="display:none"></div>

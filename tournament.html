@@ -45,11 +45,14 @@ function wizShow(n){
 
 window.wizardEnter=function(){
   unlockAudioCtx();           // unlock audio on this first tap
-  // If already checked in, skip straight past the wizard
-  if(getMyName()&&getMyHouse()){
+  // After a reset (_forceWizard) ALWAYS run the full check-in — never skip, even if some
+  // stale name lingers in storage. Otherwise, a returning user skips straight in.
+  if(!_forceWizard && getMyName() && getMyHouse()){
     document.getElementById('wizard').style.display='none';
     return;
   }
+  // Starting the wizard means we're (re)entering identity — clear any lingering identity now
+  wizName=''; wizHouse='';
   wizShow(1);
   // wire up name autocomplete inside wizard
   setTimeout(()=>{
@@ -212,6 +215,8 @@ try{
   const _sp = new URLSearchParams(location.search);
   if(_sp.has('fresh')){
     localStorage.clear();
+    // Explicitly remove identity keys too, in case Safari's clear() is lazy
+    ['wt_name','wt_house','wt_did','wt_freq','wt_alerted_duels','device_id'].forEach(k=>{ try{localStorage.removeItem(k);}catch(e){} });
     try{ sessionStorage.clear(); }catch(e){}
     _forceWizard = true;
     history.replaceState(null, '', location.pathname);
@@ -894,31 +899,56 @@ window.setAsMe=async function(){
   lookupPersonal();
 };
 
-// ══ HOUSE FIX (My Honour escape hatch) ══
-function openHouseFix(){
-  const box=document.getElementById('house-fix-box');
-  if(box) box.style.display = box.style.display==='none' ? 'block' : 'none';
+// ══ IDENTITY EDITOR (My Honour — change name AND house) ══
+let identityHouse=null;
+function toggleIdentityEditor(){
+  const box=document.getElementById('identity-editor');
+  if(!box)return;
+  const opening = box.style.display==='none';
+  box.style.display = opening ? 'block' : 'none';
+  if(opening){
+    // Pre-fill with current identity
+    const cur = document.getElementById('personal-name').value.trim() || getMyName() || '';
+    const inp=document.getElementById('identity-name');
+    if(inp) inp.value=cur;
+    identityHouse = S.playerHouses[normName(cur)] || getMyHouse() || null;
+    document.querySelectorAll('.identity-house-btn').forEach(b=>b.classList.remove('sel'));
+    if(identityHouse) document.querySelectorAll('.identity-house-btn.'+identityHouse).forEach(b=>b.classList.add('sel'));
+    // Wire name autocomplete + add-custom
+    setupNameInput('identity-name','identity-sug',(picked)=>{ const h=S.playerHouses[normName(picked)]; if(h){identityHouse=h;document.querySelectorAll('.identity-house-btn').forEach(b=>b.classList.remove('sel'));document.querySelectorAll('.identity-house-btn.'+h).forEach(b=>b.classList.add('sel'));} });
+  }
 }
-async function fixHouse(h){
-  const name=document.getElementById('personal-name').value.trim()||getMyName();
-  if(!name){toast('Look up thy name first');return;}
-  // Changing details here makes THIS name the device's identity for everything
-  rememberMe(name,h);
-  // Update Firestore player house mapping
-  await fsSet('state/playerHouses',{[normName(name)]:h});
-  S.playerHouses[normName(name)]=h;
-  // Update any existing entries this person has so their points land on the right house
-  for(const a of S.archery.filter(x=>normName(x.name)===normName(name))){ try{await setDoc(doc(db,'archery',a.id),{house:h},{merge:true});a.house=h;}catch(e){} }
-  for(const n of S.nail.filter(x=>normName(x.name)===normName(name))){ try{await setDoc(doc(db,'nail',n.id),{house:h},{merge:true});n.house=h;}catch(e){} }
-  for(const cb of S.caber.filter(x=>normName(x.name)===normName(name))){ try{await setDoc(doc(db,'caber',cb.id),{house:h},{merge:true});cb.house=h;}catch(e){} }
+function setIdentityHouse(h){
+  identityHouse=h;
+  document.querySelectorAll('.identity-house-btn').forEach(b=>b.classList.remove('sel'));
+  document.querySelectorAll('.identity-house-btn.'+h).forEach(b=>b.classList.add('sel'));
+}
+async function saveIdentity(){
+  const name=document.getElementById('identity-name').value.trim();
+  if(!name){toast('Type thy name first');return;}
+  if(!identityHouse){toast('Choose thy house');return;}
+  // Make this the device identity for EVERYTHING
+  rememberMe(name,identityHouse);
+  // If this is a name not on the list, add it so it's recognised everywhere
+  if(!GUESTS.some(g=>normName(g)===normName(name))){ await addCustomGuest(name); }
+  // Record house in Firestore
+  await fsSet('state/playerHouses',{[normName(name)]:identityHouse});
+  S.playerHouses[normName(name)]=identityHouse;
+  // Move any existing entries under this name to the chosen house so points land correctly
+  for(const a of S.archery.filter(x=>normName(x.name)===normName(name))){ try{await setDoc(doc(db,'archery',a.id),{house:identityHouse},{merge:true});a.house=identityHouse;}catch(e){} }
+  for(const n of S.nail.filter(x=>normName(x.name)===normName(name))){ try{await setDoc(doc(db,'nail',n.id),{house:identityHouse},{merge:true});n.house=identityHouse;}catch(e){} }
+  for(const cb of S.caber.filter(x=>normName(x.name)===normName(name))){ try{await setDoc(doc(db,'caber',cb.id),{house:identityHouse},{merge:true});cb.house=identityHouse;}catch(e){} }
   clearPPCache();
-  document.getElementById('house-fix-box').style.display='none';
-  toast('Thy house hath been changed to '+capFirst(h)+'! 🛡️');
+  document.getElementById('identity-editor').style.display='none';
+  document.getElementById('personal-name').value=name;
+  toast('Thy details are saved — thou art now '+name+' of House '+capFirst(identityHouse)+'! ⚔');
   lookupPersonal();
   renderWelcome();
+  updateDuelBadge();
 }
-window.openHouseFix=openHouseFix;
-window.fixHouse=fixHouse;
+window.toggleIdentityEditor=toggleIdentityEditor;
+window.setIdentityHouse=setIdentityHouse;
+window.saveIdentity=saveIdentity;
 
 // ══ ART ══
 let artFileData=null;
@@ -1887,16 +1917,19 @@ input[type=file]{display:none;}
           <div style="font-family:'Cinzel',serif;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:var(--ink-light)">Personal Honour</div>
           <div class="personal-pts" id="personal-pts-val">0</div>
           <div class="personal-house-badge" id="personal-house-badge"></div>
-          <div style="margin-top:10px"><span onclick="openHouseFix()" style="font-size:12px;font-style:italic;color:var(--ink-light);text-decoration:underline;cursor:pointer">Wrong house? Tap to change</span></div>
           <div id="personal-identity-box" style="display:none;margin-top:10px;padding:8px;background:rgba(122,85,16,0.06);border-radius:4px"></div>
-          <div id="house-fix-box" style="display:none;margin-top:10px;padding:10px;background:rgba(122,85,16,0.08);border-radius:4px">
-            <div style="font-family:'Cinzel',serif;font-size:10px;color:var(--ink-light);margin-bottom:8px;letter-spacing:0.06em">CHOOSE THY TRUE HOUSE</div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
-              <button class="hpick-btn dragon" onclick="fixHouse('dragon')"><span class="pe">🐉</span>Dragon</button>
-              <button class="hpick-btn wolf" onclick="fixHouse('wolf')"><span class="pe">🐺</span>Wolf</button>
-              <button class="hpick-btn snake" onclick="fixHouse('snake')"><span class="pe">🐍</span>Snake</button>
-              <button class="hpick-btn lion" onclick="fixHouse('lion')"><span class="pe">🦁</span>Lion</button>
+          <div style="margin-top:12px"><span onclick="toggleIdentityEditor()" style="font-size:12px;font-style:italic;color:var(--ink-light);text-decoration:underline;cursor:pointer">⚙ Change my name or house</span></div>
+          <div id="identity-editor" style="display:none;margin-top:10px;padding:12px;background:rgba(122,85,16,0.08);border-radius:4px;text-align:left">
+            <div style="font-family:'Cinzel',serif;font-size:10px;color:var(--ink-light);margin-bottom:6px;letter-spacing:0.06em">MY NAME</div>
+            <div class="input-wrap" style="margin-bottom:12px"><input class="form-input" type="text" id="identity-name" placeholder="Type thy name..." autocomplete="off" style="font-size:15px;padding:9px 11px"/><div class="suggestions" id="identity-sug" style="display:none"></div></div>
+            <div style="font-family:'Cinzel',serif;font-size:10px;color:var(--ink-light);margin-bottom:6px;letter-spacing:0.06em">MY HOUSE</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:12px">
+              <button class="hpick-btn identity-house-btn dragon" onclick="setIdentityHouse('dragon')"><span class="pe">🐉</span>Dragon</button>
+              <button class="hpick-btn identity-house-btn wolf" onclick="setIdentityHouse('wolf')"><span class="pe">🐺</span>Wolf</button>
+              <button class="hpick-btn identity-house-btn snake" onclick="setIdentityHouse('snake')"><span class="pe">🐍</span>Snake</button>
+              <button class="hpick-btn identity-house-btn lion" onclick="setIdentityHouse('lion')"><span class="pe">🦁</span>Lion</button>
             </div>
+            <button class="btn-primary" style="margin-top:0" onclick="saveIdentity()">Save My Details</button>
           </div>
         </div>
         <div class="section-title" style="font-size:10px">Honour Breakdown</div>

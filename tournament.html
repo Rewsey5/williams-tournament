@@ -70,11 +70,7 @@ window.wizardEnter=function(){
         } else {
           sug.innerHTML=`<div class="add-name-opt">➕ Don't see thy name? Press here to add it</div>`;
           sug.style.display='block';
-          sug.querySelector('.add-name-opt').addEventListener('click',async()=>{
-            await addCustomGuest(val);
-            inp.value=val;sug.style.display='none';
-            toast('Welcome, '+val+'! ⚔');
-          });
+          sug.querySelector('.add-name-opt').addEventListener('click',()=>{ sug.style.display='none'; wizardShowAddName(); });
         }
       });
       inp.focus();
@@ -86,10 +82,31 @@ window.wizardName=function(){
   const inp=document.getElementById('wz-name');
   const err=document.getElementById('wz-name-err');
   const val=inp.value.trim();
-  if(!val){err.textContent='Thou must declare thy name to proceed';return;}
-  // Soft-validate against guest list — warn but allow (covers nicknames)
+  if(!val){err.textContent='Type thy name, or add it below';return;}
   wizName=val;
   err.textContent='';
+  wizShow(2);
+};
+
+window.wizShow=wizShow;
+window.wizardShowAddName=function(){
+  // Carry over whatever they were typing
+  const typed=(document.getElementById('wz-name').value||'').trim();
+  const inp=document.getElementById('wz-addname-input');
+  if(inp) inp.value=typed;
+  wizShow('addname');
+  setTimeout(()=>{ const i=document.getElementById('wz-addname-input'); if(i)i.focus(); },120);
+};
+
+window.wizardAddName=async function(){
+  const inp=document.getElementById('wz-addname-input');
+  const err=document.getElementById('wz-addname-err');
+  const val=(inp.value||'').trim();
+  if(!val){err.textContent='Enter thy name to proceed';return;}
+  await addCustomGuest(val);   // adds to the list for ALL devices
+  wizName=val;
+  err.textContent='';
+  toast('Welcome to the realm, '+val+'! ⚔');
   wizShow(2);
 };
 
@@ -168,7 +185,7 @@ function playSound(k){ try{ const s=SFX[k]; if(s){s.currentTime=0;s.volume=0.8;s
 function haptic(p){ try{ if(navigator.vibrate) navigator.vibrate(p); }catch(e){} }
 
 // ══ GUESTS ══
-let GUESTS = ["Will","Rachael","Leigh","Charlie","Lanni","Tim","Anastashia","Tay","Ellen","Di","Steve","Sarah","Jack","Alex McDonald","Masia","Ollie","Liam","Siobhan","Xavier","Tamrin","Ryan","Sienna","Seb","Charlotte","Angus","Bec","Morgan","Maddy Brown","Maddy","Alex Broussard","Pat","Caitlin","Aaron","Kitty","Mim","Eska","Jojo","Rich","Ivy","Tilly","Henry","Paul Smith","Holly","Sophie","Eddy","Mike","Teresa","Emily","Kane","James","Dianna","Josh","Kelly","Noah","Len","Karen","Dianne Anderson","Pete","David","Kate","Tamara","Dave","Francis","Maeve","Zozo","Stephen McDonald","Steven Rewse-Bongers","Lilian","Eleanor","Harriet","Amber","Ducky","Patrice","Sam","Clara","Mitch","Grace","Alfie","Ewan","Paul Harrison","Dianne McDonald","Jayden","Allison","Crawf","Moe","Lily","Luke"];
+let GUESTS = ["Will","Rachael","Leigh","Charlie","Lanni","Tim","Anastashia","Tay","Ellen","Di","Steve","Sarah","Jack","Alex McDonald","Masia","Ollie","Liam","Siobhan","Xavier","Tamrin","Ryan","Sienna","Seb","Charlotte","Angus","Bec","Morgan","Maddy Brown","Maddy","Alex Broussard","Pat","Caitlin","Aaron","Kitty","Mim","Eska","Jojo","Rich","Ivy","Tilly","Henry","Paul Smith","Holly","Sophie","Eddy","Mike","Teresa","Emily","Kane","James","Dianna","Josh","Kelly","Noah","Len","Karen","Dianne Anderson","Pete","David","Kate","Tamara","Dave","Francis","Maeve","Zozo","Stephen McDonald","Steven Rewse-Bongers","Lilian","Eleanor","Harriet","Amber","Ducky","Patrice","Sam","Clara","Mitch","Grace","Alfie","Ewan","Paul Harrison","Dianne McDonald","Jayden","Allison","Crawf","Moe","Lily","Luke","Loz","Ollie","Nick"];
 
 const HOUSES = [
   {id:'dragon',name:'Dragon',emoji:'🐉',color:'#c0392b',img:'house_dragon_transparent.png'},
@@ -180,8 +197,6 @@ const HOUSES = [
 const TEAM_EVENTS = [
   {id:'tug',         name:'Tug of War',       emoji:'💪'},
   {id:'wheelbarrow', name:'Wheelbarrow Race',  emoji:'🏃'},
-  {id:'filltub',     name:'Fill a Tub',        emoji:'🪣'},
-  {id:'joust',       name:'Pool Noodle Joust', emoji:'🤺'},
 ];
 
 const WINNER_BONUS = 15; // Art & Best Dressed winner gets this to self + house when locked
@@ -1742,6 +1757,8 @@ input[type=file]{display:none;}
 .wz-input:focus{border-color:#e6b830;background:#f5e6bf}
 .wz-btn{display:block;width:100%;margin-top:16px;padding:14px;background:linear-gradient(180deg,#c8941a,#9a6f12);color:#1c0f05;border:2px solid #e6b830;font-family:'Cinzel',serif;font-size:14px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer;border-radius:3px;transition:all 0.15s;box-shadow:0 4px 16px rgba(200,148,26,0.3)}
 .wz-btn:hover{background:linear-gradient(180deg,#e6b830,#c8941a);box-shadow:0 4px 22px rgba(230,184,48,0.5)}
+.wz-btn-outline{display:block;width:100%;margin-top:0;padding:14px;background:rgba(200,148,26,0.08);color:#e6b830;border:2px solid #c8941a;font-family:'Cinzel',serif;font-size:13px;font-weight:700;letter-spacing:0.06em;cursor:pointer;border-radius:3px;transition:all 0.15s}
+.wz-btn-outline:hover{background:rgba(200,148,26,0.2);border-color:#e6b830;box-shadow:0 4px 16px rgba(200,148,26,0.25)}
 .wz-skip{display:block;width:100%;margin-top:10px;padding:8px;background:transparent;color:rgba(230,210,150,0.5);border:none;font-family:'Cinzel',serif;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;cursor:pointer}
 .wz-skip:hover{color:rgba(230,210,150,0.8)}
 .wz-err{color:#e74c3c;font-family:'Crimson Text',serif;font-size:13px;font-style:italic;text-align:center;min-height:18px;margin-top:8px}
@@ -2161,17 +2178,32 @@ input[type=file]{display:none;}
       <button class="wz-btn" onclick="wizardEnter()">Enter the Realm ⚔</button>
     </div>
 
-    <!-- STEP 1: Name -->
+    <!-- STEP 1: Find Name -->
     <div class="wz-step" id="wz-1" style="display:none">
       <div class="wz-icon">📜</div>
       <div class="wz-title">Find Thy Name</div>
-      <div class="wz-sub">Search the royal scroll for thy name</div>
+      <div class="wz-sub">Search the royal scroll</div>
       <div class="input-wrap" style="margin-top:16px">
         <input class="wz-input" type="text" id="wz-name" placeholder="Begin typing thy name..." autocomplete="off"/>
         <div class="suggestions" id="wz-name-sug" style="display:none"></div>
       </div>
       <div id="wz-name-err" class="wz-err"></div>
       <button class="wz-btn" onclick="wizardName()">Continue →</button>
+      <div style="margin:18px 0 6px;display:flex;align-items:center;gap:10px"><div style="flex:1;height:1px;background:rgba(230,210,150,0.2)"></div><div style="font-family:'Cinzel',serif;font-size:10px;color:rgba(230,210,150,0.5);letter-spacing:0.1em">OR</div><div style="flex:1;height:1px;background:rgba(230,210,150,0.2)"></div></div>
+      <button class="wz-btn-outline" onclick="wizardShowAddName()">✍️ Not on the list? Add thy name</button>
+    </div>
+
+    <!-- STEP 1b: Add Name (self-register) -->
+    <div class="wz-step" id="wz-addname" style="display:none">
+      <div class="wz-icon">✍️</div>
+      <div class="wz-title">Add Thy Name</div>
+      <div class="wz-sub">Enter thy name to join the realm — thou shalt appear for all</div>
+      <div class="input-wrap" style="margin-top:18px">
+        <input class="wz-input" type="text" id="wz-addname-input" placeholder="Type thy full name..." autocomplete="off"/>
+      </div>
+      <div id="wz-addname-err" class="wz-err"></div>
+      <button class="wz-btn" onclick="wizardAddName()">Add Me & Continue →</button>
+      <button class="wz-skip" onclick="wizShow(1)">← Back to search</button>
     </div>
 
     <!-- STEP 2: House -->
